@@ -71,6 +71,66 @@ def error_page(tempid, error1, error2):
 	f1.write(error2)
 
 class EdgePrediction:
+	"""Edge Prediction class
+	Implements the aglorithm described in Bean et al. 2017
+	All parameters have sensible defaults except to_predict, which must be specified by the user at some point
+	before the algorithm can run.
+	Parameters
+	----------
+	min_weight : float
+		minimum allowed feature weight, default 0.0
+	max_weight : float
+		maximum allowed feature weight is max_weight - step. Default 1.1 gives a  max feature weight is 1.0 with the 
+		default step size 0.1
+	
+	step : float
+		step size used in parameter grid search for feature weights. Default 0.1
+	
+	to_predict : str
+		Type of edge to predict. Must exactly match an edge type in the graph and must be set by user
+		before the prediction algorithm will run. default None.
+	
+	pval_significance_threshold : float
+		threshold applied to select features from the enrichment test. Features with p-value for enrichment (after
+		multiple testing correction if used) < threshold are considered enriched. Default 0.05
+	
+	require_all_predictors : bool
+		Optional. If true, a model will only be trained for a given target if at least one predictor for each type of edge 
+		in the graph is found with the enrichment test (after applying multiple testing correction if used). Default True
+	
+	objective_function : str
+		Optional. This is parameterised to allow convenient extension. Only the J objective is used in Bean et al 2017.
+		J means Youden's J statistic, J = sensitivity + specificity - 1. Default is "J", options are {'J', 'F1', 'F2', 'F05', 'ACC'}.
+	
+	ties : str
+		Optional. Method used to select which set of weights to use where two sets give identical performance of the objective 
+		function. 'first' uses the set found first, 'minL2norm' uses L2 normalisation to prefer balanced weights. If
+		two sets of weights give idential performance and have the same L2 normalisation, the weights found first are
+		kept. This means the network_order is important for both methods. Default 'minL2norm', options are {'first', 'minL2norm'}
+	network_order : list
+		Optional. The order in which the features are iterated over. This can be important as ultimately any ties are broken by keeping
+		the parameters found first in the search. The best order may not ultimately matter, and will be context-specific. In
+		general it is recommended to specify the order so it will remain consistent. The default order is determined by the 
+		keys of the internal dict object, which is not guaranteed. 
+	
+	randomise_folds : bool
+		Optional. Whether to randomise the order of items in the full dataset before splitting all items into train-test folds.
+		If False, the folds will always be identical between runs. Default True
+	correct_pval : str
+		Optional. Correct p-values from enrichment test for multiple testing. Currently setting anything other than "BH" will
+		result in no correction being applied. 'BH' or None, default 'BH'.
+	Attributes
+	----------
+	graphs : dict 
+		Internal representation of the input graph. There is one element per edge type. {'graph': igraph.Graph, 'sourcenodes': list, 
+		'sourcetype': str, 'targetnodes': list, 'targettype': str}
+	
+	can_analyse : bool
+		Flag used to keep track of any conditions that mean the network cannot be analysed
+	
+	optimisation_method : str
+		Currently only "graph" is available, which implements the method of Bean et al. 2017. 
+	"""
 	def __init__(self, email, tempid, to_predict = None):
 		
 		self.min_weight = 0.0 
@@ -81,9 +141,9 @@ class EdgePrediction:
 		self.tempid = tempid
 		
 		self.pval_significance_threshold = 0.05
-		self.require_all_predictors = False #only build a model if predictors are found in all input graphs 
+		self.require_all_predictors = False #build a model even if predictors are not found in some input graphs 
 		self.objective_function = "J"
-		 
+		
 		self.ties = "minL2norm" #method to break tied weights
 		self.randomise_folds = True #put known source nodes in random order before generating folds
 		self.network_order = None
@@ -97,6 +157,29 @@ class EdgePrediction:
 	def CSV_to_graph(self,fname, srcNameCol = "Source node name", 
 				  srcTypeCol = "Source node type", tgtNameCol = "Target node name", 
 				  tgtTypeCol = "Target node type", edgeTypeCol = "Relationship type"):
+		"""Parse csv file to internal graph representation
+		
+		The parsed graph is stored internally in self.graphs and is not returned. 
+		Parameters
+		----------
+		fname : str
+			Input file name or path. Must be a csv file with a header.
+		srcNameCol : str
+			Column in input file containing source node names.
+		srcTypeCol : str
+			Column in input file containing source node type. 
+		tgtNameCol : str
+			Column in input file containing target node names. 
+		tgtTypeCol : str
+			Column in input file containing target node types. 
+		edgeTypeCol : str
+			Column in input file containing edge types.
+		Returns
+		-------
+		bool : bool 
+			True for success, False otherwise.
+		"""
+
 		edge_types = {}
 		with open(fname, 'rU') as f:
 			reader = csv.reader(f)
@@ -144,6 +227,16 @@ class EdgePrediction:
 		return True
 
 	def preprocess(self):
+		"""Automates the first two steps to prepare data for training loop
+		Does not need to be called manually.
+		Parameters
+		----------
+		self : object
+		Returns
+		-------
+		None : 
+			Internal network representation is updated
+		"""
 		self.filterNetworksByCommonSource()
 		self.sparseAdjacency()
 
@@ -151,6 +244,15 @@ class EdgePrediction:
 	## filter all graphs, keeping only source nodes common to all graphs (with all of their edges)
 	## filtering is not necessary for the algorithm, but the current implementation expects filtering and won't work otherwise
 	def filterNetworksByCommonSource(self):
+		"""Delete source nodes that don't have at least one edge of every type.
+		Parameters
+		----------
+		self : object
+		Returns
+		-------
+		None :
+			Internal network representation is updated. 
+		"""
 		graph_names = self.graphs.keys()
 
 		#get the common source nodes
@@ -201,6 +303,18 @@ class EdgePrediction:
 		return None
 
 	def sparseAdjacency(self):
+		"""Efficient representation of sparse adjacency matrix.
+		Updates self.graphs generated from csv input with a sparse adjacency matrix. Edges are stored in both directions:
+		source to target (ST) and target to source (TS). The representation is a dict where keys are node names and values are
+		sets of other nodes connected with an edge of each type. There is one dict per edge type in the input data.
+		Parameters
+		----------
+		self : object
+		Returns
+		-------
+		None : 
+			Internal network representation is updated.
+		"""
 		for network_name in self.graphs:
 
 			#map graph ids to node names
@@ -222,6 +336,17 @@ class EdgePrediction:
 			self.graphs[network_name]['TS'] = adj_TS
 
 	def groupSparseAdjacency(self, target):
+		"""Adjacency for all nodes with known edges to the target vs all others.
+		Parameters
+		----------
+		target : str
+			The name of the target node that we're predicting edges to.
+		Returns
+		-------
+		grouped : dict
+			The grouped adjacency matrix. Each element of the dict is one type of edge in the network.
+			The output is the full (sparse) matrix.
+		"""
 		known = self.graphs[self.to_predict]['TS'][target]
 		grouped = {}
 		for network_name in self.graphs:
@@ -238,6 +363,21 @@ class EdgePrediction:
 		return grouped
 
 	def filterSparseAdjacency(self, pvals, ignore = None):
+		"""Filter a sparse adjacency matrix, keeping only the target nodes that are significantly enriched
+		Parameters
+		----------
+		pvals : dict
+			Output from from self.enrichment, see return value for self.enrichment
+		ignore : bool
+			name of the target node that that edges are predicted for, so it should removed from the enrichment calculation
+		Returns
+		-------
+		all_filtered : dict
+			keys are edge types, values are {'overlap':list,'colnames':list, 'predictors': list}
+			'overlap' : adjacency of each source node with all predictors
+			'colnames' : source nodes in the graph
+			'predictors' : all enriched predictor names
+		"""
 		all_filtered = {}
 		for network_name in self.graphs:
 			predictors = pvals[network_name][:,0] < self.pval_significance_threshold
@@ -256,6 +396,20 @@ class EdgePrediction:
 		return all_filtered
 
 	def enrichment(self, grouped, n_known, n_other):
+		"""Fisher's exact test for enrichment to identify features (predictors)
+		Parameters
+		----------
+		grouped : dict 
+			output from from self.groupSparseAdjacency
+		n_known : int
+			number of source nodes with an edge to the target node
+		n_other : int
+			number of source nodes without an edge to the target node
+		Returns
+		-------
+		all_pvals : dict
+			Keys are edge types, values are numpy arrays. Array columns are [p, known_present, other_present, known_absent, other_absent ]
+		"""
 		all_pvals = {}
 		for network_name in grouped:
 			nrows = grouped[network_name]['matrix'].shape[0]
@@ -282,16 +436,57 @@ class EdgePrediction:
 		return all_pvals
 
 	def createWeightsGenerator(self, min_weight = None, max_weight = None, step = None):
+		"""Generate weights for parameter grid search.
+		All parameters are required. They must be set on self for some omtimisation methods (min_weight, max_weight, step). 
+		Parameters
+		----------
+		min_weight : float
+			lower bound of search space
+		max_weight : float
+			upper bound of search space, should be intended bound + step
+		step : float
+			granularity of search space
+		Returns
+		-------
+		weights_generator : generator
+			Instance of a generator that returns all combinations of parameters in the specified range
+		"""
 		weights_generator = itertools.product(np.arange(min_weight, max_weight, step), repeat = len(self.graphs))
 		return weights_generator
 		
 	
 	def getKnown(self, target):
+		"""Convenience function to list all nodes with an edge to the target.
+		self.to_predict must be set to a valid edge type.
+		Parameters
+		----------
+		target: str
+			Node name.
+		Returns
+		-------
+		list : list
+			all nodes with an edge to the target
+			returns empty list if the target is found but has no edges or is not found
+		"""
 		if target in self.graphs[self.to_predict]['TS']:
 			return list(self.graphs[self.to_predict]['TS'][target])
 		return []
 
 	def normalisePredictorOverlap(self, filtered):
+		"""Perform feature normalisation to range 0-1.
+		The raw adjacencies for each feature are divided by the max value for that feature.
+		Parameters
+		----------
+		filtered: dict 
+			output of self.filterSparseAdjacency
+		Returns
+		-------
+		all_normalised : dict
+			Keys are edge types, values are dicts. The nexted dict is keyed by source node name and values are normalised
+			adjacencies.
+		all_overlap_max : dict
+			Keys are edge types, values are the max adjacency in for that edge type.
+		"""
 		all_normalised = {}
 		all_overlap_max = {}
 		for network_name in filtered:
@@ -306,6 +501,18 @@ class EdgePrediction:
 		return all_normalised, all_overlap_max
 
 	def weightPredictorOverlap(self, overlaps, weights):
+		"""Multiply each feature by a weight.
+		Parameters
+		----------
+		overlaps : dict 
+			output of normalisePredictorOverlap
+		weights : dict
+			Keys are edge types, values are weights
+		Returns
+		-------
+		weighted : dict
+			dict with same structure as input overlaps, but with all values multiplied by their respective weights
+		"""
 		weighted = {}
 		for network_name in overlaps:
 			weighted[network_name] = {}
@@ -314,6 +521,16 @@ class EdgePrediction:
 		return weighted
 
 	def score(self, overlaps):
+		"""Calculate the final score for each source node from weighted features.
+		Parameters
+		----------
+		overlaps : dict 
+			output from self.weightPredictorOverlap, normalised and weighted features for each source node
+		Returns
+		-------
+		scores : dict
+			Keys are edge types, values are dicts keyed by source node name and values are scores.
+		"""
 		networks = overlaps.keys()
 		nodes = overlaps[networks[0]].keys()
 		scores = {}
@@ -324,6 +541,27 @@ class EdgePrediction:
 		return scores
 
 	def findOptimumThreshold(self, score, known, calculate_auc = False):
+		"""Set the prediction threshold according to the objective function
+		The objective function is set by self.objective_function
+		Parameters
+		----------
+		score : dict 
+			output from from self.score, keys are edge types, values are dicts keyed by source node name and values are scores.
+		known : list
+			source nodes with an edge to the target of type self.to_predict
+		calculate_auc : bool
+			Whether or not to calculare and return the AUC. Default True.
+		Returns
+		-------
+		best : dict
+			Contains many standard metrics for the model, e.g. F1 score, AUC, precision, recall, which have predictable names.
+			Important proporties of the output are:
+			'threshold' : cutoff value that maximises the objective function
+			'unique_threshold' : bool, true if the same performance can be achieved with at least one different threshold
+			'hits_known' : hits from the model that are already known in the input graph
+			'hits_new' : hits from the model that are not already known in the input graph
+			'is_hit' : bool list, hit status for every source node.
+		"""
 		node_names = score.keys()
 		score = np.array([score[x] for x in score])
 		known = np.in1d(node_names, known, assume_unique=True)
@@ -365,9 +603,40 @@ class EdgePrediction:
 		return best
 
 	def L2norm(self, weights):
+		"""Regluarisation of weights
+		Parameters
+		----------
+		weights : list
+			Model parameters, weights of each feature.
+		Returns
+		-------
+		Float : Float
+			L2 regularisation of the weights
+		"""
 		return sum([x**2 for x in weights])
 
 	def predict(self, target, calculate_auc = False):
+		"""Train a predictive model for a given target.
+		Optimum parameters are found using a grid search.
+		Parameters
+		----------
+		target : str
+			target node name to predict edges of type self.to_predict for
+		calculate_auc: bool
+			If True, the AUC is calculated and included in the output. Default False.
+		
+		Returns
+		-------
+		optimisation_result : dict
+			Predictions from the trained model and various standard metrics such as precision, recall, F1, etc. 
+			Output contains the model target and objective function so the results are self-describing. The most
+			important proporties are:
+			'all_hits' : all hit source nodes from the model
+			'new_hits' : all hits from the model that are not known in the input graph
+			'known_hits' : all hits from the model that are known in the input graph
+			'weights' : dict of parameters in the trained model, keys are edge types
+			'threshold' : threshold of trained model
+		"""
 		if self.to_predict == None or self.can_analyse == False:
 			print "ERROR can't run prediction. self.to_predict = %s, self.can_analyse = %s" % (self.to_predict, self.can_analyse)
 			email = self.email
@@ -523,6 +792,20 @@ class EdgePrediction:
 		return optimisation_result
 
 	def predictAll(self, calculate_auc=False):
+		"""Train predictive models for all target nodes.
+		Train predictive model for all target nodes of edges with the type self.to_predict. Not all targets
+		will necessarily results in models depending on whether any enriched features are identified, and
+		on self.require_all_predictors. The results is the same as manually calling self.predict on each 
+		target, this function is for convenience.
+		Parameters
+		----------
+		calculate_auc : bool
+			If true, the AUC is calculated and returned for each model. Default False.
+		Returns
+		-------
+		all_results : dict
+			Keys are model target node names, values are the output of self.predict()
+		"""
 		if self.to_predict == None or self.can_analyse == False:
 			print "can't run prediction. self.to_predict = %s, self.can_analyse = %s" % (self.to_predict, self.can_analyse)
 			email = self.email
@@ -543,6 +826,21 @@ class EdgePrediction:
 		return all_results
 
 	def loo(self, target, calculate_auc = False):
+		"""Leave-one-out cross validation
+		In each iteration, a single edge from a source node to the target node is deleted. A predictive model
+		is trained on this modified data to determine whether the model predicts the missing (deleted) edge.
+		Parameters
+		----------
+		target : str
+			Target node name to predict edges of type self.to_predict for
+		calculate_auc : bool
+			If true, the AUC is calculated and returned for each model. Default False.
+		Returns
+		-------
+		loo_results : dict
+			Keys are names of known source nodes in the graph. Values are the objective function performance and 
+			whether the deleted edge was predicted.
+		"""
 		if self.to_predict == None or self.can_analyse == False:
 			print "ERROR can't run prediction. self.to_predict = %s, self.can_analyse = %s" % (self.to_predict, self.can_analyse)
 			email = self.email
@@ -578,6 +876,26 @@ class EdgePrediction:
 		return loo_results
 
 	def k_fold(self, target, k, calculate_auc = False):
+		"""Modified k-fold cross validation.
+		This is a modidication of a standard k-fold cross validation. In this implementation, edges are deleted from 
+		the graph and a predictive model is then trained on this modified data. Therefore the test set is not entirely 
+		held out during training, instead it is included as true negative examples. The ability of the trained model 
+		to predict the deleted edges is determined in every fold. 
+		Parameters
+		----------
+		target : str
+			Target node name to predict edges of type self.to_predict for.
+		k : int
+			The number of folds.
+		calculate_auc : bool
+			If true, the AUC is calculated and returned for each model. Default False.
+		Returns
+		-------
+		all_folds : list
+			Each item in the list is a dict. The result is the output of self.predict with additional properties.
+			'left_out_predicted' : which of the deleted edges was predicted
+			'proportion_predicted' : proportion of all deleted edges that was predicted
+		"""
 		#generate folds
 		known = self.getKnown(target)
 		if self.randomise_folds:
@@ -643,6 +961,21 @@ class EdgePrediction:
 		return all_folds
 
 	def auc(self, x, y, reorder=False):
+		"""Calculate AUC
+		Credit to scipy.metrics 
+		
+		Parameters
+		----------
+		x : list
+		y : list
+		reorder : bool
+			reorder the data points according to the x axis and using y to break ties.
+			Default False.
+		Returns
+		-------
+		area : float
+			The area under the curve
+		"""
 		direction = 1
 		if reorder:
 			
@@ -891,7 +1224,7 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	ep.CSV_to_graph(fname = merge_filename)
 	ep.preprocess()
 	ep.to_predict = 'risk_gene'
-	ep.network_order = order_list  # input_dict['order']  # ['HAS_SIDE_EFFECT', 'DRUG_TARGETS', 'INDICATED_FOR']
+	# ep.network_order = order_list  # input_dict['order']  # ['HAS_SIDE_EFFECT', 'DRUG_TARGETS', 'INDICATED_FOR']
 	result = ep.predict(target=target_name, calculate_auc=True)
 	new_predictions = result['new_hits']
 	known_predictions = result['known_hits']
@@ -1464,6 +1797,5 @@ def downloads():
 if __name__ == '__main__':
 	app.static_folder = 'static'
 	app.run(debug=True)
-
 
 
