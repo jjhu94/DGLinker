@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+                <meta http-equiv="refresh" content="10">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <meta charset="UTF-8">
+                <meta content="IE=edge" http-equiv="X-UA-Compatible">
+                <meta content="width=device-width,initial-scale=1" name="viewport">
+                <meta content="description" name="description">
+                <meta name="google" content="notranslate" />
+                <!-- Disable tap highlight on IE -->
+                <meta name="msapplication-tap-highlight" content="no">
+                
+                <link href="" rel="stylesheet">
+                <title>Redirecting...</title>
+                                
+                <script type="text/javascript" src="{{ url_for('static', filename='js/jquery.min.js') }}" ></script>
+                <script type="text/javascript" src="{{ url_for('static', filename='js/jquery-ui.js') }}" ></script>
+                <script type="text/javascript" src="{{ url_for('static', filename='js/main.0cf8b554.js') }}" ></script>
+                <script type="text/javascript" src="{{ url_for('static', filename='js/jquery.dataTables.min.js') }}" ></script>
+                <!-- <script type="text/javascript" src="{{ url_for('static', filename='js/dataTables.bootstrap.min.js') }}" ></script> -->
+                <script type="text/javascript" src="{{ url_for('static', filename='js/bootstrap.min.js') }}" ></script>
+                
+                <!-- <link ... href="{{ url_for('static', filename='css/main.550dcf66.css') }}" rel="stylesheet"/> --> 
+                <link ... href="{{ url_for('static', filename='css/jquery-ui.css') }}" rel="stylesheet"/>
+                <link ... href="{{ url_for('static', filename='css/jquery.dataTables.min.css') }}" rel="stylesheet"/>
+                <link ... href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet"/>
+                <link ... href="{{ url_for('static', filename='css/dataTables.bootstrap.min.css') }}" rel="stylesheet"/>
+
+                <style>
+                        .loader {
+                        border: 10px solid #f3f3f3;
+                        border-radius: 50%;
+                        border-top: 10px solid #3498db;
+                        width: 30px;
+                        height: 30px;
+                        -webkit-animation: spin 2s linear infinite; /* Safari */
+                        animation: spin 2s linear infinite;
+                        }
+                        .navbar-default .navbar-nav>li>a {
+                        color: #f5f5f5;
+                        }
+                        .footer {
+                        position: fixed;
+                        left: 0;
+                        bottom: 0;
+                        width: 100%;
+                        }
+        
+                        /* Safari */
+                        @-webkit-keyframes spin {
+                        0% { -webkit-transform: rotate(0deg); }
+                        100% { -webkit-transform: rotate(360deg); }
+                        }
+        
+                        @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                        }
+
+
+                </style>
+
+        </head>
+        <body>
+                <header>
+                        <nav class="navbar-default navbar-fixed-top" style="background-color: #8fabdd;">
+                          <div class="container">
+                            <div class="navbar-header">
+                              
+                            </div>
+                            <div class="collapse navbar-collapse" id="navbar-collapse">
+                              <div class ="row">
+                                <div class="col-3">
+                                    <a href="https://dglinker.rosalind.kcl.ac.uk"> <img src="{{url_for('static', filename='css/assets/images/dglinker_logo_ideas-page-001.jpg')}}" alt="" align="left" style="width: 200px; height: auto;"/></a>
+                                </div>
+                              <div class="col-9">
+                                  <ul class="nav navbar-nav navbar-right" style="font-size:18px;text-align: center;">
+                                        <li><a href="https://dglinker.rosalind.kcl.ac.uk/" title=""><br>Home</a></li>
+                                        <li><a href="https://dglinker.rosalind.kcl.ac.uk/#getstart"><br>Get Started</a></li>
+                                        <li><a href="https://dglinker.rosalind.kcl.ac.uk/#retrieve"><br>Retrieve Job</a></li>
+                                        <li><a href="https://dglinker.rosalind.kcl.ac.uk/tutorial" title=""><br>Tutorial</a></li>
+                                        <li><a href="https://dglinker.rosalind.kcl.ac.uk/result/7f5db11f61c94a4e9bc66ddb7fdcb498" title=""><br>Example: ALS</a></li>
+                                        <li><a href="https://dglinker.rosalind.kcl.ac.uk/help" title=""><br>Contact/Help</a></li>
+                                  </ul>
+                                </div>
+                                
+                              </div>  
+                      
+                            </div>
+                          </div>
+                        </nav>
+                </header>
+                <br><br><br><br><br><br><br><br><br>
+                <div class="container">
+                        <div class="loader" style="float:center;"></div>
+                        <br>
+                        <p>Your job is being processed, you will be redirected to the output when it is ready. Alternatively you can find your results <a href="https://dglinker.rosalind.kcl.ac.uk/result/{{ tempid }}"> here </a> when they are ready.<br><br>
+                        Your Project ID: <b>{{ tempid }}</b><br><br>
+                        You can retrieve your jobs from the webserver home page, using the project ID.<br><br>
+                        Results should be available within minutes. However, this can vary substantially as the time needed to complete a job depends on the number and size of the databases selected, and the number of input genes. Do not worry if the server takes longer than expected. An error email is sent if the job fails as long as an email address was provided.
+                        </p>
+                        <br><br><br><br><br><br>
+                </div>
+                <footer class="footer-container white-text-container footer" style="background-color: #8fabdd; margin-top: 30px;">
+                        <div class="container">
+                          <div class="row">
+                            <div class="col-xs-12">
+                              <img src="{{url_for('static', filename='css/assets/images/dglinker_logo_ideas-page-001.jpg')}}" alt="" style="width: 200px; height: auto; float:left;">
+                              <img src="{{url_for('static', filename='css/assets/images/logo-01.jpg')}}" alt="" style="width:170px;float: right; ">
+                            </div>
+                          </div> 
+                        </div>
+                </footer>
+
+        </body>
+        </html>

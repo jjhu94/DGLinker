@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta content="IE=edge" http-equiv="X-UA-Compatible">
+    <meta content="width=device-width,initial-scale=1" name="viewport">
+    <meta content="description" name="description">
+    <meta name="google" content="notranslate" />
+    <!-- Disable tap highlight on IE -->
+    <meta name="msapplication-tap-highlight" content="no">
+    
+    <link href="" rel="stylesheet">
+    <title>Tutorial</title>
+      
+  <script type="text/javascript" src="{{ url_for('static', filename='js/jquery.min.js') }}" ></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='js/jquery-ui.js') }}" ></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='js/main.0cf8b554.js') }}" ></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='js/jquery.dataTables.min.js') }}" ></script>
+  <!-- <script type="text/javascript" src="{{ url_for('static', filename='js/dataTables.bootstrap.min.js') }}" ></script> -->
+  <script type="text/javascript" src="{{ url_for('static', filename='js/bootstrap.min.js') }}" ></script>
+  
+   <!-- <link ... href="{{ url_for('static', filename='css/main.550dcf66.css') }}" rel="stylesheet"/> --> 
+  <link ... href="{{ url_for('static', filename='css/jquery-ui.css') }}" rel="stylesheet"/>
+  <link ... href="{{ url_for('static', filename='css/jquery.dataTables.min.css') }}" rel="stylesheet"/>
+  <link ... href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet"/>
+  <link ... href="{{ url_for('static', filename='css/dataTables.bootstrap.min.css') }}" rel="stylesheet"/>
+      
+  <style>
+  .navbar-default .navbar-nav>li>a {
+      color: #f5f5f5;
+  }
+  
+  </style>
+      
+  </head>
+
+<body> <!-- Add your content of header -->
+  <header>
+    <nav class="navbar-default navbar-fixed-top" style="background-color: #8fabdd;">
+      <div class="container">
+        <div class="navbar-header">
+          
+        </div>
+        <div class="collapse navbar-collapse" id="navbar-collapse">
+          <div class ="row">
+            <div class="col-3">
+                <a href="https://dglinker.rosalind.kcl.ac.uk"> <img src="{{url_for('static', filename='css/assets/images/dglinker_logo_ideas-page-001.jpg')}}" alt="" align="left" style="width: 200px; height: auto;"/></a>
+            </div>
+          <div class="col-9">
+              <ul class="nav navbar-nav navbar-right" style="font-size:18px;text-align: center;">
+                    <li><a href="https://dglinker.rosalind.kcl.ac.uk/" title=""><br>Home</a></li>
+                    <li><a href="https://dglinker.rosalind.kcl.ac.uk/#getstart"><br>Get Started</a></li>
+                    <li><a href="https://dglinker.rosalind.kcl.ac.uk/#retrieve"><br>Retrieve Job</a></li>
+                    <li><a href="https://dglinker.rosalind.kcl.ac.uk/tutorial" title=""><br>Tutorial</a></li>
+                    <li><a href="https://dglinker.rosalind.kcl.ac.uk/result/7f5db11f61c94a4e9bc66ddb7fdcb498" title=""><br>Example: ALS</a></li>
+                    <li><a href="https://dglinker.rosalind.kcl.ac.uk/help" title=""><br>Contact/Help</a></li>
+              </ul>
+            </div>
+            
+          </div>  
+  
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <div class="section-container">
+    <div class="container text-center">
+      <div class="row section-container-spacer">
+        <div class="col-xs-12 col-md-12">
+            <div class="container">
+                <h2><br><br><br>Tutorial</h2>
+
+                <p style="text-align: left; font-size: 16px;">
+                    <br>
+                    <a href="#0">0.Quick start</a><br>
+                    <a href="#1">1.How to run a basic job</a><br>
+                    <a href="#2">2.Input details</a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#2.1">1.Email address</a> <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#2.2">2.Input options</a> <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#2.2.1">1.Select phenotype(s)</a> <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#2.2.2">2.Select phenotype(s) associated genes</a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#2.2.3">3.Select genes</a> <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#2.3">3.Available databases <br></a>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#2.4">4.Upload database(s) <br></a>
+<a href="#3">3.Retrieve a job</a> <br>
+<a href="#4">4.Results page</a> <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#4.1">1.Job summary</a> <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#4.2">2.Results table</a> <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#4.3">3.Gene networks</a> <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#4.4">4.Enrichment analysis</a> <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#4.5">5.Download results</a> <br>
+<a href="#5">5.Results files</a> <br>
+<a href="#6">6.Browser compatibility</a> <br>
+<a href="#7">7.External resources</a> <br>
+<a href="#8">8.References</a> <br>                    
+                </p>
+                <a name="0"></a>
+                <p style="text-align: justify;font-size: 22px;"><br><br><b>0.Quick start </b></p>
+                <p style="text-align: justify;font-size: 16px;">
+                    To run a job please follow the steps below (Figure 1):<br>
+                    1.	Go to the homepage (<a href="https://dglinker.rosalind.kcl.ac.uk">https://dglinker.rosalind.kcl.ac.uk</a>);<br>
+                    2.	(Optional but recommended) Enter your email address if you want to receive job notifications and details, and a link to the results page via email; <br>
+                    3.	Choose the input type you want to use to predict candidate genes;<br>
+                    4.	Load the example;<br>
+                    5.	Click “Predict”.<br>
+                </p>
+                <img src="{{url_for('static', filename='css/assets/images/figure1.png')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 1</b></p>
+                <br>
+                <a name="1"></a>
+                <p style="text-align: justify;font-size: 22px;"><br><b>1.How to run a basic job</b></p>
+                <p style="text-align: justify;font-size: 16px;">
+                    To run a job please follow the steps below (Figure 2):<br>
+                    1.	Go to the homepage (<a href="https://dglinker.rosalind.kcl.ac.uk">https://dglinker.rosalind.kcl.ac.uk</a>);<br>
+                    2.	(Optional but recommended) Enter your email address if you want to receive job notifications and details, and a link to the results page via email; <br>
+                    3.	Enter the phenotype(s) you want to predict candidate genes for;<br>
+                    4.	Click “Predict”.<br>
+                </p>
+                <img src="{{url_for('static', filename='css/assets/images/figure2.JPG')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 2</b></p>
+                <br>
+                <a name="2"></a>
+                <a name="2.1"></a>
+                <p style="text-align: justify;font-size: 22px;"><br><b>2.Input details</b></p>
+                <p style="text-align: justify;font-size: 16px;">
+                  For simplified imformation, you can put the cursor on the “?” logo next to the corresponding title (Figure 3).
+                </p>
+                <img src="{{url_for('static', filename='css/assets/images/figure3.jpg')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 3</b></p>
+                <br>
+                <p style="text-align: justify;font-size: 20px;"><b>2.1 Email address</b></p>
+                <a name="2.2"></a>
+                <a name="2.2.1"></a>
+                <p style="text-align: justify;font-size: 16px;">Providing an email address is optional although strongly recommended (Figure 1). If provided, the webserver will send the following: 1) a confirmation email, when the job is submitted, with the job ID and a link to the results page, where the user will be able to visualise the results when ready; 2) when the job is completed, a completion email to alert the user that either the results are now available or, in case of error, that the job was not completed successfully.</p>
+                <p style="text-align: justify;font-size: 20px;"><b>2.2 Input options</b></p>
+                <p style="text-align: justify;font-size: 18px;"><b>2.2.1 Select phenotype(s)</b></p>
+                <p style="text-align: justify;font-size: 16px;">This is the default input option (Figure 4). DGLinker uses our current knowledge of the genes that are associated with the target phenotype to predict new candidate genes. When one or more phenotypes are selected, DGLinker uses all genes associated with them on DisGeNet v7.0 (<a href="https://www.disgenet.org">https://www.disgenet.org</a>) as input known genes.</p>
+                <img src="{{url_for('static', filename='css/assets/images/figure4.png')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 4</b></p>
+                <br>
+                <p style="text-align: justify;font-size: 16px;">
+                  If “Retrieve related phenotypes” is selected, phenotypes matching the input keywords will be automatically selected (Figure 5).
+                </p>
+                <img src="{{url_for('static', filename='css/assets/images/figure5.JPG')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 5</b></p>
+                <br>
+                <a name="2.2.2"></a>
+                <p style="text-align: justify;font-size: 18px;"><br><br><b>2.2.2 Select phenotype(s) associated genes</b></p>
+                <p style="text-align: justify;font-size: 16px;">If the user selects this option, they must provide both a list of genes and one or more phenotypes that the genes are associated with (Figure 6). These will be used to train the predictive model instead of the DisGeNet associations. Although DisGeNet is a comprehensive and curated database of gene-phenotype relationships, it is not unusual for researchers to have their own manually curated lists of phenotype-associated genes. These might reflect, 
+                for example, specific required supporting evidence of association, novel/not-yet established associations, the result of their own studies, or disease subtypes.</p>
+                <img src="{{url_for('static', filename='css/assets/images/figure6.png')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 6</b></p>
+                <br>
+                <a name="2.2.3"></a>
+                <p style="text-align: justify;font-size: 18px;"><br><br><b>2.2.3 Select genes</b></p>
+                <p style="text-align: justify;font-size: 16px;">If the user selects this option, they must provide a list of genes (Figure 7). 
+                Using this option assumes that the phenotype(s) the provided genes are associated with, 
+                is(are) not known to be the same or strongly related (e.g. a subtype) with any present in DisGeNet. </p>
+                <img src="{{url_for('static', filename='css/assets/images/figure7.png')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 7</b></p>
+                <br>
+                <a name="2.3"></a>
+                <p style="text-align: justify;font-size: 20px;"><br><br><b>2.3 Available databases</b></p>
+                <p style="text-align: justify;font-size: 16px;">By default, one gene-disease (DisGeNet), protein-protein interaction (IntAct) and the gene ontology (2020-11-17 release) datasets are selected (Figure 8). 
+                The user can select additional databases or remove any of the default ones by ticking the corresponding boxes. 
+                At least one database must be selected to start a job.</p>
+                <img src="{{url_for('static', filename='css/assets/images/figure8.JPG')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 8</b></p>
+                <br>
+                <a name="2.4"></a>
+                <p style="text-align: justify;font-size: 20px;"><br><br><b>2.4 Upload database(s)</b></p>
+                <p style="text-align: justify;font-size: 16px;">Users can upload their own dataset(s) of gene-phenotype or gene-gene relationships using the “Upload database(s)” tool (Figure 9a). These have to be in comma delimited csv format and include at least one “Gene” column. 
+                The HGNC nomenclature (<a href="https://www.genenames.org">https://www.genenames.org</a>) must be used. If more than one database is to be 
+                uploaded, these must be selected and uploaded together (Figure 9b). Currently, there is a limit of 100Mb
+                    to upload datasets. </p>
+                <img src="{{url_for('static', filename='css/assets/images/figure9a.JPG')}}" alt="" style="width: 1000px; height: auto; float: center;">   
+                <p style="text-align: center;font-size: 18px;"><b>Figure 9a</b></p>
+                <br>
+                <img src="{{url_for('static', filename='css/assets/images/figure9b.png')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 9b</b></p>
+                <br>
+                <a name="3"></a>
+                <p style="text-align: justify;font-size: 22px;"><br><br><b>3. Retrieve a job</b></p>
+                <p style="text-align: justify;font-size: 16px;">This section of the homepage allows the results of a job to be retrieved by using the job ID that was 
+                generated when the job was submitted (Figure 10). The Job ID is displayed in the waiting page after 
+                submission and emailed to the user if an email address was provided.</p>
+                <img src="{{url_for('static', filename='css/assets/images/figure10.png')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 10</b></p>
+                <br>
+                <a name="4"></a>
+                <p style="text-align: justify;font-size: 22px;"><br><b>4. Results page</b></p>
+                <a name="4.1"></a>
+                <p style="text-align: justify;font-size: 16px;">After submitting a job, results should be available within minutes. 
+                However, this can vary substantially as the time needed to complete a job depends on the number
+                and size of the databases selected, and the number of input genes. Do not worry if the server takes 
+                longer than expected. An error email is sent if the job fails as long as an email address was provided. <br>
+                The results page is divided into the following 5 main tabs:</p>
+                <p style="text-align: justify;font-size: 20px;"><b>4.1 Job summary</b></p>
+                <p style="text-align: justify;font-size: 16px;">This tab displays a table with the details of the job submission and number of predicted genes (Figure 11).</p>
+                <img src="{{url_for('static', filename='css/assets/images/figure11.png')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 11</b></p>
+                <br>
+                <a name="4.2"></a>
+                <p style="text-align: justify;font-size: 20px;"><br><b>4.2 Results table</b></p>
+                <p style="text-align: justify;font-size: 16px;">This tab displays an interactive table that contains the list of predicted and known genes, 
+                their prediction score and a number of links to external databases that contain useful information 
+                about the genes (Figure 12).</p>
+                <img src="{{url_for('static', filename='css/assets/images/figure12.png')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 12</b></p>
+                <br>
+                <a name="4.3"></a>
+                <p style="text-align: justify;font-size: 20px;"><br><b>4.3 Gene networks</b></p>
+                <p style="text-align: justify;font-size: 16px;">This tab allows the user to visualize the interaction networks of the top 50 genes 
+                (according to their score) from the knowledge graph used for the prediction (Figure 13a). 
+                By clicking on the individual genes, an interactive network visualization is displayed in the right 
+                panel of the tab. This individual gene network will include all terms the selected gene interacted 
+                directly with (1st degree neighbours), and all genes, among the top 50, that interacted with the selected
+                gene neighbours. </p>
+                <img src="{{url_for('static', filename='css/assets/images/figure13a.png')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 13a</b></p>
+                <br>
+                <p style="text-align: justify;font-size: 16px;">In the network graph, circular nodes represent genes and boxes represent non-gene nodes (e.g. GOterms).
+                Different colours identify different classes of non-gene nodes (e.g. proteins, diseases, GOterms, etc), 
+                or distinguish between the central gene node (the selected gene we are visualising the network of), 
+                known genes and predicted genes (Figure 13b).</p>
+                <img src="{{url_for('static', filename='css/assets/images/figure13b.png')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 13b</b></p>
+                <br>
+                <a name="4.4"></a>
+                <p style="text-align: justify;font-size: 20px;"><br><b>4.4 Enrichment analysis</b></p>
+                <p style="text-align: justify;font-size: 16px;">This tab displays and allows the download of the results of the enrichment analysis. 
+                After the gene prediction step is completed, DGLinker performs a gene set enrichment analysis 
+                (<a href='https://en.wikipedia.org/wiki/Gene_set_enrichment_analysis'>https://en.wikipedia.org/wiki/Gene_set_enrichment_analysis</a>) using Enricher (<a href='https://maayanlab.cloud/Enrichr/'>https://maayanlab.cloud/Enrichr/</a>) 
+                and 9 selected databases, with 3 gene sets: the job input set of known genes, the predicted genes and
+                the union of these 2 sets (Figure 14).</p>
+                <img src="{{url_for('static', filename='css/assets/images/figure14.png')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 14</b></p>
+                <br>
+                <a name="4.5"></a>
+                <p style="text-align: justify;font-size: 16px;">For each gene set, the graphs display the 10 most significantly enriched (according to the adjusted
+                p-value) terms of the 9 databases. Both the graphs and the complete results of each individual gene set
+                and database can be downloaded from this tab (Figure 15).</p>
+                <p style="text-align: justify;font-size: 20px;"><br><b>4.5 Download results</b></p>
+                <p style="text-align: justify;font-size: 16px;">This tab allows the user to download the whole set of results as a zip archive (Figure 12).</p>
+                <img src="{{url_for('static', filename='css/assets/images/figure15.png')}}" alt="" style="width: 1000px; height: auto; float: center;">    
+                <p style="text-align: center;font-size: 18px;"><b>Figure 15</b></p>
+                <br>
+                <a name="5"></a>
+                <p style="text-align: justify;font-size: 22px;"><br><br><b>5. Results files</b></p>
+                <p style="text-align: justify;font-size: 16px;">All results can be downloaded from the webserver as a zip archive named “zip$jobID.zip”. 
+                By double-clicking on the zip archive, you should be able to extract its content as most operative
+                systems have compression utilities to deal with zip files preinstalled (Figure 13). However, in the 
+                event that you do not have such utilities preinstalled, you can download one from the web 
+                (e.g WinRar <a href='https://www.win-rar.com'>https://www.win-rar.com</a>). Please find below a description of the content of the results 
+                zip archive.
+                </p>
+                <p style="text-align: justify;font-size: 16px;">
+                    zip$<i>jobID</i><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|-enrichr$<i>jobID</i> <span style="font-size: smaller;">#This folder contains the results of the gene-set enrichment analysis</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|-<i>$jobID_$geneSet_$db</i>.txt <span style="font-size: smaller;">#raw results of the gene-set analysis</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|-<i>$jobID_$geneSet_$db</i>.png <span style="font-size: smaller;">#graph of the top 10 hits from the gene-set analysis</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|-graph_dir$<i>jobID</i><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|-$<i>geneName</i>.txt <span style="font-size: smaller;">#individual gene interaction file in text format</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|-graph_$<i>geneName</i>.html <span style="font-size: smaller;">#"standalone" individual gene network in html format</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|-model_results<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|-graph_file$<i>jobID</i>.txt <span style="font-size: smaller;">#network interaction file in text format of the knowledge-graph</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|-job_summary_$<i>jobID</i>.txt <span style="font-size: smaller;">#job summary file</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|-results_$<i>jobID</i>.txt <span style="font-size: smaller;">#model output: gene list and scores</span>
+                </p>
+                <br>
+                <a name="6"></a>
+                <p style="text-align: justify;font-size: 22px;"><br><b>6. Browser compatibility</b></p>
+                <p style="text-align: justify;font-size: 14px;">DGLinker was tested on the browsers listed in Table 2.</p>
+                <table width=100% border = 1>
+                    <tr class="CaseRow">
+                        <th style="text-align:center">OS</th>
+                        <th style="text-align:center">Version</th>
+                        <th style="text-align:center">Chrome</th>
+                        <th style="text-align:center">Firefox</th>
+                        <th style="text-align:center">Microsoft Edge</th>
+                        <th style="text-align:center">Opera</th>
+                        <th style="text-align:center">Safari</th>
+                    </tr>
+                    <tr class="CaseRow">
+                        <td>Linux</td>
+                        <td>Ubuntu 16</td>   
+                        <td>71.0.3578.98</td>
+                        <td>67.0.4</td>
+                        <td>n/a</td>
+                        <td>73.0.3856.284</td>
+                        <td>n/a</td>
+                    </tr>
+                    <tr class="CaseRow">
+                        <td>MacOs</td>
+                        <td>Catalina 10.15.5</td>   
+                        <td>87.0.4280.88</td>
+                        <td>82.0.2</td>
+                        <td>n/a</td>
+                        <td>73.0.3856.284</td>
+                        <td>13.1.1</td>
+                    </tr>
+                    <tr class="CaseRow">
+                        <td>Windows</td>
+                        <td>10</td>   
+                        <td>78.0.3904.108</td>
+                        <td>71.0</td>
+                        <td>44.18362.449.0</td>
+                        <td>73.0.3856.284</td>
+                        <td>n/a</td>
+                    </tr>
+                  </table>
+                <br>
+                <br>
+                <a name="7"></a>
+                <p style="text-align: justify;font-size: 22px;"><br><b>7. External resources</b></p>
+                <table width=100% border = 1>
+                    <tr class="CaseRow">
+                        <th style="text-align:center">DGLinker usage</th>
+                        <th style="text-align:center">Source name</th>
+                        <th style="text-align:center">Link</th>
+                        <th style="text-align:center">Reference</th>
+                    </tr>
+                    <tr class="CaseRow">
+                        <td>Knowledge graph and Machine Learning method</td>
+                        <td>ADR-graph</td>
+                        <td><a href='https://github.com/KHP-Informatics/ADR-graph'>Github(https://github.com/KHP-Informatics/ADR-graph)</a></td>
+                        <td><a href='https://www.nature.com/articles/s41598-017-16674-x'>Bean at al.[1]</a></td>
+                    </tr>
+                    <tr class="CaseRow">
+                        <td>Enrichment analysis</td>
+                        <td>Enricher</td>
+                        <td><a href='https://maayanlab.cloud/Enrichr/'>Enrichr website(https://maayanlab.cloud/Enrichr/)</a></td>
+                        <td><a href='https://doi.org/10.1093/nar/gkw377'>Kuleshov et al. [2]</td></a>
+                    </tr>
+                    <tr class="CaseRow">
+                        <td>Network visualization</td>
+                        <td>Pyvis</td>
+                        <td><a href='https://pyvis.readthedocs.io'>Pyvis website(https://pyvis.readthedocs.io)</a></td>
+                        <td><a href='https://arxiv.org/abs/2006.04951'>Perrone et al. [3]</td></a>
+                    </tr>
+                    <tr class="CaseRow">
+                        <td>Bio/Pheno Databases</td>
+                        <td>EBI- PSICQUIC</td>
+                        <td><a href='http://www.ebi.ac.uk/Tools/webservices/psicquic/view/main.xhtml'>EBI website(http://www.ebi.ac.uk/Tools/webservices/psicquic/view/main.xhtml)</a></td>
+                        <td><a href='https://doi.org/10.1093/nar/gkt392'>Del-Toro et al. [4]</td></a>
+                    </tr>
+                </table>
+                <br>
+                <br>
+                <a name="8"></a>
+                <p style="text-align: justify;font-size: 22px;"><br><b>8. References</b></p>
+                <p style="text-align: justify;font-size: 14px;">
+                    [1] Bean, Daniel M., et al. "Knowledge graph prediction of unknown adverse drug reactions and validation in electronic health records." <i>Scientific reports</i> 7.1 (2017): 1-11.<br>
+                    [2] Kuleshov, Maxim V., et al. "Enrichr: a comprehensive gene set enrichment analysis web server 2016 update." <i>Nucleic acids research</i> 44.W1 (2016): W90-W97.<br>
+                    [3] Perrone, Giancarlo, Jose Unpingco, and Haw-minn Lu. "Network visualizations with Pyvis and VisJS." arXiv preprint arXiv:2006.04951 (2020).<br>
+                    [4] del-Toro, Noemi, et al. "A new reference implementation of the PSICQUIC web service." <i>Nucleic acids research</i> 41.W1 (2013): W601-W606.<br>
+                </p>
+
+            </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  
+  <footer class="footer-container white-text-container" style="background-color: #8fabdd; margin-top: 30px;">
+    <div class="container">
+      <div class="row">
+        <div class="col-xs-12">
+          <img src="{{url_for('static', filename='css/assets/images/dglinker_logo_ideas-page-001.jpg')}}" alt="" style="width: 200px; height: auto; float:left;">
+          <img src="{{url_for('static', filename='css/assets/images/logo-01.jpg')}}" alt="" style="width:170px;float: right; ">
+        </div>
+      </div> 
+    </div>
+  </footer>
+
+  <script type="text/javascript"  src="{{ url_for('static', filename='js/main.0cf8b554.js') }}" ></script></body>
+
+</html>
