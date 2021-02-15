@@ -43,21 +43,19 @@ from rpy2.robjects.packages import importr
 from rpy2.robjects.vectors import FloatVector
 
 
-UPLOAD_FOLDER = '/var/www/kgp/FlaskApp/uploads'
 ALLOWED_EXTENSIONS = set(['csv'])
 
 
 app = Flask(__name__)
-app.secret_key='DGLinker'
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 def allowed_file(filename):
 	return '.' in filename and filename.rsplit('.', 1)[1] in ALLOWED_EXTENSIONS
 
-
 def send_error(email, tempid, error1, error2):
 	if email != '':
-		yag = yagmail.SMTP( user="dglinker.service@gmail.com", password="DGLinker!", host='smtp.gmail.com')
+		yag = yagmail.SMTP()
 		subject = "DGLinker: There is something wrong with your project."
 		contents = "Dear user,\n\n  There is something wrong with your project： \n https://dglinker.rosalind.kcl.ac.uk/result/%s \n" % tempid
 		contents = contents + str(error1) + '\n'+ str(error2)
@@ -1131,7 +1129,7 @@ def _prepare():
 		return redirect(url_for('result',tempid=tempid))
 
 def send_start(email, tempid):
-	yag = yagmail.SMTP( user="dglinker.service@gmail.com", password="DGLinker!", host='smtp.gmail.com')
+	yag = yagmail.SMTP()
 	subject = "DGLinker: Your project has been submitted."
 	contents = "Dear user,\n\n Your project has been submited. You can find your result at the following link when the job will be completed: \n https://dglinker.rosalind.kcl.ac.uk/result/%s \n\n Best wishes, \n The DGLinker Team" % tempid
 	yag.send(email, subject, contents)
@@ -1511,7 +1509,7 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 
 def send_result(email, tempid):
 	if email != '':
-		yag = yagmail.SMTP( user="dglinker.service@gmail.com", password="DGLinker!", host='smtp.gmail.com')
+		yag = yagmail.SMTP()
 		subject = "Your result from DGLinker."
 		contents = "Dear user,\n\n Please find attached a summary of your results. You can download the complete results at the following link: \n https://dglinker.rosalind.kcl.ac.uk/result/%s \n\n Best wishes, \n The DGLinker Team" % tempid
 		attlist = ['/var/www/kgp/FlaskApp/cache/result_file%s.txt' % tempid]
