@@ -7,6 +7,7 @@ from collections import defaultdict
 from collections import Counter
 from flask import flash, Flask, make_response, redirect, render_template, request, send_file, url_for
 from pyvis.network import Network
+from scipy.stats import hypergeom
 from threading import Thread
 from werkzeug.utils import secure_filename
 
@@ -55,6 +56,12 @@ def error_page(tempid, err):
 	f1 = open('/var/www/kgp/FlaskApp/cache/error_file%s.txt' % tempid,'w')
 	f1.write(str(err))
 	f1.close()
+
+def hyper_prob_at_least(pop_n, pop_true, draw_n, draw_true):
+    #prob of at least h hits is i - cdf(h-1)
+    prb = hypergeom.cdf(draw_true-1, pop_n, pop_true, draw_n)
+    prb_h_plus = 1 - prb
+    return prb_h_plus
 
 @app.route('/')
 def index():
@@ -249,47 +256,65 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	if k_value:
 		xv_results = []
 		xv = ep.k_fold(target = str(target_name), k = int(k_value), calculate_auc = False) # , int(k_value)
-		for fold in xv:
-			fold['objective'] = "J"
+		f1 = open('/var/www/kgp/FlaskApp/data/log.txt','a')
+		f1.write(str(xv))
+		if xv:
+			for fold in xv:
+				fold['objective'] = "J"
+			built = [x for x in xv if x['model_built'] == True]
+			model_performance = open('/var/www/kgp/FlaskApp/model_results/model_performance_%s.txt' % tempid, 'a')
+			model_performance.write("%s\t%s\n" % ('The total number of folds','%d' % int(k_value)))
+			model_performance.write("%s\t%s\n" % ('The number of folds could be trained','%d' % len(built)))
 
-		built = [x for x in xv if x['model_built'] == True]
-		model_performance = open('/var/www/kgp/FlaskApp/model_results/model_performance_%s.txt' % tempid, 'a')
-		model_performance.write("%s\t%s\n" % ('The number of successful folds','%d' % len(built)))
-		for fold in built:
-			fold.update(fold['contingency'])
-			fold['n_deleted_predicted'] = sum(fold['left_out_predicted'])
-			del fold['contingency']
-			del fold['left_out_predicted']
-			del fold['left_out']
+			for result in built:
+				result['n_deleted_predicted'] = sum(result['left_out_predicted'])
+				pop_n = result['contingency']['tn'] + result['contingency']['fp']
+				pop_true = result['n_known_test']
+				draw_n = result['contingency']['fp']
+				draw_true = result['n_deleted_predicted']
+				prob = hyper_prob_at_least(pop_n, pop_true, draw_n, draw_true)
+				result['prob'] = prob
+				result['signif'] = prob < 0.05
 
-		df = pd.DataFrame(built)
-		df['n_pred_train'] = df['tp'] + df['fp']
-		df['train_prec'] = df['tp'] / df['n_pred_train']
-		df['train_rec'] = df['tp'] / df['n_known_train']
-		n_neg = df['tn'] + df['fp']
-		df['train_fpr'] = df['fp'] / n_neg
+			is_significant = [x['signif'] for x in built]
+			model_performance = open('/var/www/kgp/FlaskApp/model_results/model_performance_%s.txt' % tempid, 'a')
+			model_performance.write("%s\t%s\n" % ('The number of successful and significantly enriched folds','%d' % sum(is_significant)))
 
-		# a good model has low FPR and high test recall (proportion_predicted)
-		onemins_fpr = 1 - df['train_fpr']
-		su = onemins_fpr + df['proportion_predicted']
-		pr = onemins_fpr * df['proportion_predicted']
-		df['overall'] = 2 * (pr/su)
-		df['prediction_hit_rate'] = df['n_deleted_predicted'] / df['fp'] #of FP how many are really linked
-		total_neg = df['tn'] + df['fp']
-		df['expected_hit_rate'] = df['n_known_test'] / total_neg
-		df['fc_hit_rate'] = df['prediction_hit_rate'] / df['expected_hit_rate']
-		# output_per_fold = '/var/www/kgp/FlaskApp/cache/xv_per_fold_%s.csv' % tempid
-		# df.to_csv(output_per_fold, index=False)
+			for fold in built:
+				fold.update(fold['contingency'])
+				fold['n_deleted_predicted'] = sum(fold['left_out_predicted'])
+				del fold['contingency']
+				del fold['left_out_predicted']
+				del fold['left_out']
+				
+			df = pd.DataFrame(built)
+			df['n_pred_train'] = df['tp'] + df['fp']
+			df['train_prec'] = df['tp'] / df['n_pred_train']
+			df['train_rec'] = df['tp'] / df['n_known_train']
+			n_neg = df['tn'] + df['fp']
+			df['train_fpr'] = df['fp'] / n_neg
 
-		#average results over all folds
-		gr = df.groupby('target')
+			# a good model has low FPR and high test recall (proportion_predicted)
+			onemins_fpr = 1 - df['train_fpr']
+			su = onemins_fpr + df['proportion_predicted']
+			pr = onemins_fpr * df['proportion_predicted']
+			df['overall'] = 2 * (pr/su)
+			df['prediction_hit_rate'] = df['n_deleted_predicted'] / df['fp'] #of FP how many are really linked
+			total_neg = df['tn'] + df['fp']
+			df['expected_hit_rate'] = df['n_known_test'] / total_neg
+			df['fc_hit_rate'] = df['prediction_hit_rate'] / df['expected_hit_rate']
+			# output_per_fold = '/var/www/kgp/FlaskApp/cache/xv_per_fold_%s.csv' % tempid
+			# df.to_csv(output_per_fold, index=False)
 
-		keep = ['objective_performance', 'train_prec', 'train_rec', 'train_fpr', 
-				'proportion_predicted', 'overall', 'prediction_hit_rate', 'expected_hit_rate',
-				'fc_hit_rate']
-		xv_avg = gr[keep].mean()
-		xv_avg.reset_index(inplace=True)
-		model_performance.write("%s\t%s\n" % ('The average performance improvement vs random', '%.3f' % xv_avg['fc_hit_rate']))
+			#average results over all folds
+			gr = df.groupby('target')
+
+			keep = ['objective_performance', 'train_prec', 'train_rec', 'train_fpr', 
+					'proportion_predicted', 'overall', 'prediction_hit_rate', 'expected_hit_rate',
+					'fc_hit_rate']
+			xv_avg = gr[keep].mean()
+			xv_avg.reset_index(inplace=True)
+			model_performance.write("%s\t%s\n" % ('The average performance improvement vs random', '%.3f' % xv_avg['fc_hit_rate']))
 
 	try:
 		result = ep.predict(target=target_name, calculate_auc=True, return_scores=True)
@@ -374,7 +399,7 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	model_performance.write("%s\t%s\n" % ('ACC of the Model','%.3f' % result['ACC']))
 	model_performance.write("%s\t%s\n" % ('AUC of the Model','%.3f' % result['auc']))
 	model_performance.write("%s\t%s\n" % ('F1 score of the Model','%.3f' % result['F1']))
-
+	model_performance.write("%s\t%s\n" % ('J of the Model','%.3f' % result['J']))
 
 	result_file.write("%s\n" % 'More Information About Genes')
 	download_results.write("%s\n" % 'Rank\tAssociation type\tGene name\tScore')
@@ -397,11 +422,17 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	job_summary.close()
 	download_results.flush()
 	download_results.close()
+	model_performance.flush()
+	model_performance.close()
 
 	# top 100 for enrichr
 	top_100_new = top_new[0:100]
 	# graph file for top_50_all
 	top_50_all = [tup[0] for tup in ranking][0:50]
+	top_200_all = [tup[0] for tup in ranking][0:200]
+	# get all genes:
+	# for key in result['scores']['scores']:
+
 
 	# pie chart
 	parent_dir = '/var/www/kgp/FlaskApp/static/'
@@ -409,7 +440,7 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	path = os.path.join(parent_dir, directory)
 	if not os.path.exists(path):
 		os.mkdir(path)
-	for i in top_50_all:
+	for i in top_200_all:
 		info = result['scores']['breakdown'][i]
 		pie_chart(tempid, info, i)
 	pie_chart(tempid, result['weights'], 'Total')
@@ -669,10 +700,10 @@ def result(tempid):
 					known_hits.append([count_for_known]+line[1:])
 					known_hits_list.append(line[2])
 
-		performance = OrderedDict()
+		performance = []
 		for line in model_performance:
 			line = line.strip().split('\t')
-			performance[line[0]] = line[1]
+			performance.append(line[1])
 
 		return render_template('result.html',result=result, all_hits=all_hits, tempid=tempid, performance=performance)
 	else:
@@ -734,59 +765,156 @@ def net_visualization(folder):
 			node["title"] += "<br>Neighbors:<br>" + "<br>".join(neighbor_map[node["id"]])
 			node["value"] = len(neighbor_map[node["id"]])
 
-		got_net.show(folder+'/graph_'+gene_file.split(".")[0]+".html")
-		with open(folder+'/graph_'+gene_file.split(".")[0]+".html", 'r') as origin:
+		got_net.show(folder+'/graph__'+gene_file.split(".")[0]+".html")
+		with open(folder+'/graph__'+gene_file.split(".")[0]+".html", 'r') as origin:
 			modified = []
 			for line in origin:
-				modified.append(line)
-			flag = 0
-		# os.remove(folder+'/'+gene_file.split(".")[0]+".html")
+				if 'nodes = new vis.DataSet' in line:
+					a = line.replace('        ','    ')
+				elif 'edges = new vis.DataSet' in line:
+					b = line.replace('        ','    ')
+				elif '// parsing and collecting nodes and edges from the python' in line:
+					e = line
+				else:
+					modified.append(line)
+		
+		flag = 0
+
+		modified.insert(modified.index('    var options, data;\n')+1,'    var highlightActive = false;\n')
+		modified.insert(modified.index('    var options, data;\n')+2, e)
+		modified.insert(modified.index('    var options, data;\n')+2, a)
+		modified.insert(modified.index('    var options, data;\n')+3, b)
+		modified.insert(modified.index('    function drawGraph() {\n')-2,'\n    // get a JSON object\n    var allNodes = nodes.get({ returnType: "Object" });\n')
+		modified = modified[0:modified.index( '        network = new vis.Network(container, data, options);\n')+1]
+		
+		c = '''
+						        
+        network = new vis.Network(container, data, options);
+        network.on("click", neighbourhoodHighlight);
+        network.physics.physicsEnabled = false
+		network.on("stabilizationProgress", function(params) {
+		document.getElementById('loadingBar').removeAttribute("style");
+		var maxWidth = 496;
+		var minWidth = 20;
+		var widthFactor = params.iterations/params.total;
+		var width = Math.max(minWidth,maxWidth * widthFactor);
+
+		document.getElementById('bar').style.width = width + 'px';
+		document.getElementById('text').innerHTML = Math.round(widthFactor*100) + '%';
+	});
+	network.once("stabilizationIterationsDone", function() {
+		document.getElementById('text').innerHTML = '100%';
+		document.getElementById('bar').style.width = '496px';
+		document.getElementById('loadingBar').style.opacity = 0;
+		// really clean the dom element
+		setTimeout(function () {document.getElementById('loadingBar').style.display = 'none';}, 500);
+                    });
+        return network;
+
+    }
+
+
+      function neighbourhoodHighlight(params) {
+        // if something is selected:
+        if (params.nodes.length > 0) {
+          highlightActive = true;
+          var i, j;
+          var selectedNode = params.nodes[0];
+          var degrees = 2;
+
+          // mark all nodes as hard to read.
+          for (var nodeId in allNodes) {
+            allNodes[nodeId].color = "rgba(200,200,200,0.5)";
+            if (allNodes[nodeId].hiddenLabel === undefined) {
+              allNodes[nodeId].hiddenLabel = allNodes[nodeId].label;
+              allNodes[nodeId].label = undefined;
+            }
+          }
+          var connectedNodes = network.getConnectedNodes(selectedNode);
+          var allConnectedNodes = [];
+
+          // get the second degree nodes
+          for (i = 1; i < degrees; i++) {
+            for (j = 0; j < connectedNodes.length; j++) {
+              allConnectedNodes = allConnectedNodes.concat(
+                network.getConnectedNodes(connectedNodes[j])
+              );
+            }
+          }
+
+          // all second degree nodes get a different color and their label back
+          for (i = 0; i < allConnectedNodes.length; i++) {
+            allNodes[allConnectedNodes[i]].color = "rgba(150,150,150,0.75)";
+            if (allNodes[allConnectedNodes[i]].hiddenLabel !== undefined) {
+              allNodes[allConnectedNodes[i]].label =
+                allNodes[allConnectedNodes[i]].hiddenLabel;
+              allNodes[allConnectedNodes[i]].hiddenLabel = undefined;
+            }
+          }
+
+          // all first degree nodes get their own color and their label back
+          for (i = 0; i < connectedNodes.length; i++) {
+            allNodes[connectedNodes[i]].color = undefined;
+            if (allNodes[connectedNodes[i]].hiddenLabel !== undefined) {
+              allNodes[connectedNodes[i]].label =
+                allNodes[connectedNodes[i]].hiddenLabel;
+              allNodes[connectedNodes[i]].hiddenLabel = undefined;
+            }
+          }
+
+          // the main node gets its own color and its label back.
+          allNodes[selectedNode].color = undefined;
+          if (allNodes[selectedNode].hiddenLabel !== undefined) {
+            allNodes[selectedNode].label = allNodes[selectedNode].hiddenLabel;
+            allNodes[selectedNode].hiddenLabel = undefined;
+          }
+        } else if (highlightActive === true) {
+          // reset all nodes
+          for (var nodeId in allNodes) {
+            allNodes[nodeId].color = undefined;
+            if (allNodes[nodeId].hiddenLabel !== undefined) {
+              allNodes[nodeId].label = allNodes[nodeId].hiddenLabel;
+              allNodes[nodeId].hiddenLabel = undefined;
+            }
+          }
+          highlightActive = false;
+        }
+
+        // transform the object into an array
+        var updateArray = [];
+        for (nodeId in allNodes) {
+          if (allNodes.hasOwnProperty(nodeId)) {
+            updateArray.push(allNodes[nodeId]);
+          }
+        }
+        nodes.update(updateArray);
+      }
+    
+
+    var g = drawGraph();
+
+</script>'''
+
+
+		d = '''
+</body>
+</html>
+		'''
+
+		os.remove(folder+'/graph__'+gene_file.split(".")[0]+".html")
 		with open(folder+'/'+gene_file.split(".")[0]+".html", 'a') as newer:
-			for i in range(len(modified)-10):
+			for i in range(len(modified)-2):
 				if modified[i] == '<script type="text/javascript">\n':
 					flag = 1
 				if flag == 1:
 					newer.write(modified[i])
 			
-			if '		network.on("stabilizationProgress", function(params) {\n' not in modified:
-				newer.write('''
-						network.on("stabilizationProgress", function(params) {
-						document.getElementById('loadingBar').removeAttribute("style");
-						var maxWidth = 496;
-						var minWidth = 20;
-						var widthFactor = params.iterations/params.total;
-						var width = Math.max(minWidth,maxWidth * widthFactor);
-
-						document.getElementById('bar').style.width = width + 'px';
-						document.getElementById('text').innerHTML = Math.round(widthFactor*100) + '%';
-					});
-					network.once("stabilizationIterationsDone", function() {
-						document.getElementById('text').innerHTML = '100%';
-						document.getElementById('bar').style.width = '496px';
-						document.getElementById('loadingBar').style.opacity = 0;
-						// really clean the dom element
-						setTimeout(function () {document.getElementById('loadingBar').style.display = 'none';}, 500);
-					});
-					
-
-						return network;
-
-				}
-
-				drawGraph();
-
-			</script>
-			''')
-			else:
-				newer.write('''
-					return network;
-
-				}
-
-				drawGraph();
-
-			</script>
-			''')
+			newer.write(c)
+		with open(folder+'/graph_'+gene_file.split(".")[0]+".html", 'a') as highlighted:
+			for i in range(len(modified)):
+				highlighted.write(modified[i])
+			highlighted.write(c)
+			highlighted.write(d)
 
 
 
@@ -811,9 +939,9 @@ def get_enrichment_results(tempid,ID,library):
 def pie_chart(tempid, info, i):
 	graphname = '/var/www/kgp/FlaskApp/static/pie_chart_%s/%s_%s.png' % (tempid,tempid,i)
 	plt.figure()
-	labels = [i for i in info.keys()]
+	labels = [i.replace('_', ' ') for i in info.keys()]
 	sizes = [i/sum(info.values())*100 for i in info.values()]
-	colors = ['lightsalmon', 'peachpuff', 'lightblue', 'bisque', 'plum', 'khaki', 'turquoise'][:len(sizes)]
+	colors = ['lightsalmon', 'peachpuff', 'lightblue', 'bisque', 'plum', 'khaki', 'turquoise','lightgreen'][:len(sizes)]
 	patches,text1,text2 = plt.pie(sizes,
 						labels=labels,
 						colors=colors,
@@ -825,8 +953,9 @@ def pie_chart(tempid, info, i):
 	plt.axis('equal')
 	plt.title(str(i))
 	# plt.legend()
-	plt.tight_layout()
-	plt.savefig(graphname, dpi=100)
+	# plt.tight_layout(rect=[0.03, 0.05, 0.97, 1])
+	# plt.autoscale()
+	plt.savefig(graphname, dpi=100, transparent=True, bbox_inches='tight')
 	plt.clf()
 	plt.close()
 
