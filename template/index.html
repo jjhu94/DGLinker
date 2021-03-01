@@ -10,9 +10,9 @@
 
   <!-- Disable tap highlight on IE -->
   <meta name="msapplication-tap-highlight" content="no">
-  
+  <link rel="icon" href="{{url_for('static', filename='css/assets/favicon.ico')}}">
   <link href="" rel="stylesheet">
-  <title>Index page</title>
+  <title>DGLinker</title>
     
 <script type="text/javascript" src="{{ url_for('static', filename='js/jquery.min.js') }}" ></script>
 <script type="text/javascript" src="{{ url_for('static', filename='js/jquery-ui.js') }}" ></script>
@@ -85,6 +85,7 @@
     var d = document.forms["myForm"]["g3name"].value;
     var e = document.forms["myForm"]["phenotype"].value;
     var f = document.forms["myForm"]["filename"].value;
+    var g = document.forms["myForm"]["kvalue"].value;
       
     var flag = 0;
     if($("#filename1").is(':checked')){
@@ -128,11 +129,22 @@
         alert("Please select genes");
         return false;
       }
-    }   
+    }
+
+    if($("#kfold").is(':checked')){
+        if (g == ''){
+          alert("Please input the value of k to apply k validation.");
+          return false;
+        }
+        if (g != 2 && g != 3 && g != 4 && g != 5){
+          alert("K should equals 2, 3, 4 or 5.");
+          return false;
+        }
+    }
   }
   function validate() {
-    var g = document.forms["Retrieve"]["jobname"].value;
-    if (g == "") {
+    var job = document.forms["Retrieve"]["jobname"].value;
+    if (job == "") {
         alert("Please input Project ID");
         return false;
     }
@@ -215,7 +227,7 @@
               <li><a href="#getstart"><br>Get Started</a></li>
               <li><a href="#retrieve"><br>Retrieve Job</a></li>
               <li><a href="./tutorial" title=""><br>Tutorial</a></li>
-              <li><a href="https://dglinker.rosalind.kcl.ac.uk/result/7f5db11f61c94a4e9bc66ddb7fdcb498" title=""><br>Example: ALS</a></li>
+              <li><a href="https://dglinker.rosalind.kcl.ac.uk/result/9fa43d0b8c7045dd9ab5d9ccd798e892" title=""><br>Example: ALS</a></li>
               <li><a href="./help" title=""><br>Contact/Help</a></li>
             </ul>
           </div>
@@ -288,11 +300,12 @@
                           <span class="tooltipstext">Phenotypes matching the input keywords will be automatically selected</span>
                         </p></td>
                       </tr>
+                      
                     </table>
                     <input type="button" onclick="myFunction()" value="Load Example" class="btn btn-info btn-sm">
                     <input type="button" onclick="Reset()" value="Reset" class="btn btn-info btn-sm" >
+
                   </p>
-                  
                 </div>
 
                 <script type="text/javascript" src="{{ url_for('static', filename='js/jquery-3.5.1.js') }}" ></script>
@@ -31277,7 +31290,19 @@
                   <option value="SPDYE7P">SPDYE7P</option>
                   <option value="DCAF12L2">DCAF12L2</option>
                 </datalist>
-                
+           
+                <table>
+                  <tr>
+                    <td><h3>Model validation: </h3></td>
+                  </tr>
+                  <tr>
+                    <td><input type="checkbox" id="kfold" name="kfold"> Apply K-fold validation (k=<input type="text" style="border: 1px solid #ccc; border-radius: 2px;height: 22px;width: 24px;" id='kvalue' name='kvalue' value='3'>)&nbsp;<p class="tooltips">?
+                      <span class="tooltipstext">Apply K-fold validation to the model. K should equals to 2,3,4 or 5. Selecting this option will extend the prediction time.</span>
+                    </p></td>
+                  </tr>
+                  <tr> </tr>
+                </table>
+
                 <table>
                 <tr>
                   <td><h3>Available databases: </h3></td>
@@ -31288,50 +31313,129 @@
                 </tr>
                 </table>
 
-                <table width=100%>
-                  <tr>
+                <div style="text-align: justify;width:25% ;float:left;">
+                  <table>
+                    <tr>
                       <th width=25% style="text-align:center">Gene-Disease Association</th>
+                    </tr>
+                    <tr>
+                      <td width=25% > <input type="checkbox" id="filename1" name="filename" value="/var/www/kgp/FlaskApp/data/DisGeNet v7.0.csv" checked/> DisGeNet v7.0</td>
+                    </tr>
+                    <tr>
+                      <td width=25% > <input type="checkbox" id="filename4" name="filename" value="/var/www/kgp/FlaskApp/data/OMIM v2020-04.csv" /> OMIM v2020-04</td>
+                    </tr>
+                    <tr>
+                      <td width=25% > <input type="checkbox" id="filename7" name="filename" value="/var/www/kgp/FlaskApp/data/HPO v2020-04.csv" /> HPO v2020-04</td>
+                    </tr>
+                    <tr>
+                      <td width=25% > <input type="checkbox" id="filename9" name="filename" value="/var/www/kgp/FlaskApp/data/ClinVar v2020-04.csv" /> ClinVar v2020-04</td>
+                    </tr>
+                    <tr>
+                      <th width=25% style="text-align:center"><br></th>
+                    </tr>                    
+                    <tr>
+                      <th width=25% style="text-align:center">Gene Pathways</th>
+                    </tr>               
+                    <tr>
+                      <td width=25%> <input type="checkbox" id="filename11" name="filename" value="/var/www/kgp/FlaskApp/data/Reactome v72.csv"/> Reactome v72</td>
+                    <tr>
+                      <td width=25%> <input type="checkbox" id="filename14" name="filename" value="/var/www/kgp/FlaskApp/data/KEGG v2011-05.csv" /> KEGG v2011-05</td>
+                    </tr>
+                    <tr>
+                      <th style="text-align:center"><br>Publications</th> 
+                    </tr>
+                    <tr>
+                      <td width=25%> <input type="checkbox" id="filename13" name="filename" value="/var/www/kgp/FlaskApp/data/NCBI PubMed v2020-04.csv"/> NCBI PubMed v2020-04</td>
+                    </tr> 
+                  </table>
+                </div>
+
+                <div style="text-align: justify;width:50% ;float:left;">
+                  <table>
+                    <tr>
                       <th width=50% style="text-align:center">Expression</th>
-                      <th style="text-align:center">Protein-Protein Interaction</th>
-                  </tr>
-                  <tr>
-                        <td width=25% > <input type="checkbox" id="filename1" name="filename" value="/var/www/kgp/FlaskApp/data/DisGeNet v7.0.csv" checked/> DisGeNet v7.0</td>
-                        <td width=50%> <input type="checkbox" id="filename2" name="filename" value="/var/www/kgp/FlaskApp/data/Human Protein Atlas (HPA) v19.3.csv" /> Human Protein Atlas (HPA) v19.3</td>
-                        
-                        <td > <input type="checkbox" id="filename3" name="filename" value="/var/www/kgp/FlaskApp/data/IntAct v2020-11-06.csv" checked /> IntAct v2020-11-06</td>
-  
-                  </tr>
-                  <tr>
-                        <td width=25% > <input type="checkbox" id="filename4" name="filename" value="/var/www/kgp/FlaskApp/data/OMIM v2020-04.csv" /> OMIM v2020-04</td>
-                        <td width=50%> <input type="checkbox" id="filename5" name="filename" value="/var/www/kgp/FlaskApp/data/ArrayExpress_Atlas(experiment_E-MTAB-513) v2014-07.csv" /> ArrayExpress Atlas (experiment E-MTAB-513 Illumina body map) v2014-07</td>
-                        <td width=25% > <input type="checkbox" id="filename6" name="filename" value="/var/www/kgp/FlaskApp/data/BioGRID v3.5.185.csv"/> BioGRID v3.5.185</td>
-                  </tr>               
-                  <tr>
-                        <td width=25% > <input type="checkbox" id="filename7" name="filename" value="/var/www/kgp/FlaskApp/data/HPO v2020-04.csv" /> HPO v2020-04</td>
-                        <td width=50%> <input type="checkbox" id="filename8" name="filename" value="/var/www/kgp/FlaskApp/data/ArrayExpress_Atlas(experiment_E-MTAB-62) v2011-06.csv" /> ArrayExpress Atlas (experiment E-MTAB-62) v2011-06</td>
-                        <td width=25%> </td>
-                  </tr>
-                  <tr>
-                        <td width=25% > <input type="checkbox" id="filename9" name="filename" value="/var/www/kgp/FlaskApp/data/ClinVar v2020-04.csv" /> ClinVar v2020-04</td>
-                        <td width=50%> <input type="checkbox" id="filename10" name="filename" value="/var/www/kgp/FlaskApp/data/GTex v8.csv" /> GTex, Tissue specific gene expression and eQTLs v8</td>
-                  </tr>                             
-                  <tr>
-                        <th width=25% style="text-align:center">Gene pathways</th>
-                        <th width=50% style="text-align:center">Gene Ontologies (GOterms)</th>
-                        <th style="text-align:center">Publications</th>
-                  </tr>               
-                  <tr>
-                        <td width=25%> <input type="checkbox" id="filename11" name="filename" value="/var/www/kgp/FlaskApp/data/Reactome v72.csv"/> Reactome v72</td>
-                        <td width=50% > <input type="checkbox" id="filename12" name="filename" value="/var/www/kgp/FlaskApp/data/Gene Ontology v2020-11-17.csv" checked/> Gene Ontology v2020-11-17</td>
-                        <td width=25%> <input type="checkbox" id="filename13" name="filename" value="/var/www/kgp/FlaskApp/data/NCBI PubMed v2020-04.csv"/> NCBI PubMed v2020-04</td>
-                  </tr>
-                  <tr>
-                        <td width=25%> <input type="checkbox" id="filename14" name="filename" value="/var/www/kgp/FlaskApp/data/KEGG v2011-05.csv" /> KEGG v2011-05</td>
-                        
-                        <td width=50% > <input type="checkbox" id="filename15" name="filename" value="/var/www/kgp/FlaskApp/data/UniProt v2020-04.csv" /> UniProt v2020-04</td>
-                        <td width=25%> 
-                  </tr>                           
-                </table>
+                    </tr>
+                    <tr>
+                      <td width=50%> <input type="checkbox" id="filename2" name="filename" value="/var/www/kgp/FlaskApp/data/Human Protein Atlas (HPA) v19.3.csv" /> Human Protein Atlas (HPA) v19.3</td>
+                    </tr>
+                    <tr>
+                      <td width=50%> <input type="checkbox" id="filename5" name="filename" value="/var/www/kgp/FlaskApp/data/ArrayExpress_Atlas(experiment_E-MTAB-513) v2014-07.csv" /> ArrayExpress Atlas (experiment E-MTAB-513 Illumina body map) v2014-07</td>
+                    </tr>
+                    <tr>
+                      <td width=50%> <input type="checkbox" id="filename10" name="filename" value="/var/www/kgp/FlaskApp/data/GTex v8.csv" /> GTex, Tissue specific gene expression and eQTLs v8</td>
+                    </tr>
+                    <tr>
+                      <th width=50% style="text-align:center"><br></th>
+                    </tr> 
+                    <tr>
+                      <th width=50% style="text-align:center">Gene Ontologies (GOterms)</th>
+                    </tr>
+                    <tr>
+                      <td width=50% > <input type="checkbox" id="filename12" name="filename" value="/var/www/kgp/FlaskApp/data/Gene Ontology v2020-11-17.csv" checked/> Gene Ontology v2020-11-17</td>
+                    </tr>
+                    <tr>
+                      <td width=50% > <input type="checkbox" id="filename15" name="filename" value="/var/www/kgp/FlaskApp/data/UniProt v2020-04.csv" /> UniProt v2020-04</td>
+                    </tr>
+                    <tr>
+                      <th width=50% style="text-align:center"><br></th>
+                    </tr>
+                    <tr>
+                      <th width=50% style="text-align:center">Smallmolecule-Protein Interaction</th>
+                    </tr>
+                    <tr>
+                      <td width=50% > <input type="checkbox" id="filename015" name="filename" value="/var/www/kgp/FlaskApp/data/BindingDB v2021-02.csv" /> BindingDB v2021-02</td>
+                    </tr>
+                    <tr>
+                      <td width=50% > <input type="checkbox" id="filename015" name="filename" value="/var/www/kgp/FlaskApp/data/MatrixDB v2021-02.csv" /> MatrixDB v2021-02</td>
+                    </tr>
+                    <tr>
+                      <td width=50% > <input type="checkbox" id="filename015" name="filename" value="/var/www/kgp/FlaskApp/data/ZINC v2021-02.csv" /> ZINC v2021-02</td>
+                    </tr>
+                  </table>
+                </div>
+
+                <div style="text-align: justify;width:25% ;float:right;">
+                  <table>
+                    <tr>
+                      <th width=25% style="text-align:center">Protein-Protein Interaction</th>
+                    </tr>
+                    <tr>
+                      <td > <input type="checkbox" id="filename3" name="filename" value="/var/www/kgp/FlaskApp/data/IntAct v2020-11-06.csv" checked /> IntAct v2020-11-06</td>
+                    </tr>
+                    <tr>
+                      <td width=25% > <input type="checkbox" id="filename06" name="filename" value="/var/www/kgp/FlaskApp/data/BioGRID v3.5.185.csv"/> BioGRID v3.5.185</td>
+                    </tr>
+                    <tr>
+                      <td width=25% > <input type="checkbox" id="filename06" name="filename" value="/var/www/kgp/FlaskApp/data/InnateDB v2021-02.csv"/> InnateDB v2021-02</td>
+                    </tr>
+                    <tr>
+                      <td width=25% > <input type="checkbox" id="filename06" name="filename" value="/var/www/kgp/FlaskApp/data/IRefIndex v2021-02.csv"/> IRefIndex v2021-02</td>
+                    </tr> 
+                    <tr>
+                      <td width=25% > <input type="checkbox" id="filename06" name="filename" value="/var/www/kgp/FlaskApp/data/Mentha v2021-02.csv"/> Mentha v2021-02</td>
+                    </tr>
+                    <tr>
+                      <td width=25% > <input type="checkbox" id="filename06" name="filename" value="/var/www/kgp/FlaskApp/data/MINT v2021-02.csv"/> MINT v2021-02</td>
+                    </tr>
+                    <tr>
+                      <td width=25% > <input type="checkbox" id="filename06" name="filename" value="/var/www/kgp/FlaskApp/data/DIP v2021-02.csv"/> DIP v2021-02</td>
+                    </tr>
+                    <tr>
+                      <td width=25% > <input type="checkbox" id="filename06" name="filename" value="/var/www/kgp/FlaskApp/data/IMex v2021-02.csv"/> IMex v2021-02</td>
+                    </tr>
+                    <tr>
+                      <td width=25% > <input type="checkbox" id="filename06" name="filename" value="/var/www/kgp/FlaskApp/data/MatrixDB v2021-02.csv"/> MatrixDB v2021-02</td>
+                    </tr>
+                    <tr>
+                      <td width=25% > <input type="checkbox" id="filename06" name="filename" value="/var/www/kgp/FlaskApp/data/UniProt v2021-02.csv"/> UniProt v2021-02</td>
+                    </tr>
+
+                  </table>
+                </div>
+
+                <div style="width:100px;height:10px;clear:both;"></div>
+
+
                 <br>
                 <table>
                   <tr>
@@ -31342,8 +31446,6 @@
                   </tr>
                 </table>
                 <p><input type="file" name="file[]" accept=".csv" multiple=""/></p>
-
-               
 
                 <p style="text-align:center;"><input type = "submit" value = "Predict" class="btn btn-primary" /></p>
             </form>

@@ -10,7 +10,7 @@
                 <meta name="google" content="notranslate" />
                 <!-- Disable tap highlight on IE -->
                 <meta name="msapplication-tap-highlight" content="no">
-                
+                <link rel="icon" href="{{url_for('static', filename='css/assets/favicon.ico')}}">
                 <link href="" rel="stylesheet">
                 <title>Error</title>
                                 
@@ -80,7 +80,7 @@
                                         <li><a href="https://dglinker.rosalind.kcl.ac.uk/#getstart"><br>Get Started</a></li>
                                         <li><a href="https://dglinker.rosalind.kcl.ac.uk/#retrieve"><br>Retrieve Job</a></li>
                                         <li><a href="https://dglinker.rosalind.kcl.ac.uk/tutorial" title=""><br>Tutorial</a></li>
-                                        <li><a href="https://dglinker.rosalind.kcl.ac.uk/result/7f5db11f61c94a4e9bc66ddb7fdcb498" title=""><br>Example: ALS</a></li>
+                                        <li><a href="https://dglinker.rosalind.kcl.ac.uk/result/9fa43d0b8c7045dd9ab5d9ccd798e892" title=""><br>Example: ALS</a></li>
                                         <li><a href="https://dglinker.rosalind.kcl.ac.uk/help" title=""><br>Contact/Help</a></li>
                                   </ul>
                                 </div>
@@ -94,8 +94,7 @@
                 <br><br><br><br><br><br><br><br><br>
                 <div class="container">
                     <p style="text-align: justify;font-size: 22px;"><br><b>Error!</b></p>
-                        <p>Unfortunately, your project ({{tempid}}) generated the following error and it will not continue: <i>{{error1}}</i></p>
-                        <p>{{error2}}</p>
+                        <p>Unfortunately, your project ({{tempid}}) generated the following error and it will not continue: <i>{{error}}</i></p>
                         <p><a href="https://dglinker.rosalind.kcl.ac.uk/#getstart"> Submit a new job here</a>.</p>
                         <p>If the problem persists or you need further support, feel free to email the error message and the project ID to the DGLinker team (dglinker.service@gmail.com)</p>
                         <br><br><br><br><br><br>
