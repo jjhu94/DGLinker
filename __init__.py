@@ -1,4 +1,5 @@
-
+import os
+os.environ['MPLCONFIGDIR'] = "/var/www/kgp/FlaskApp/graph"
 import matplotlib																										 
 matplotlib.use('Agg')
 
@@ -6,6 +7,7 @@ from collections import OrderedDict
 from collections import defaultdict
 from collections import Counter
 from flask import flash, Flask, make_response, redirect, render_template, request, send_file, url_for
+from functools import reduce
 from pyvis.network import Network
 from scipy.stats import hypergeom
 from threading import Thread
@@ -19,7 +21,9 @@ import json
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+plt.rcParams.update({'figure.max_open_warning': 0})
 import os
+import operator
 import pandas as pd 
 import random
 import requests
@@ -47,7 +51,7 @@ def send_error(email, tempid, error):
 	if email != '':
 		yag = yagmail.SMTP( user="dglinker.service@gmail.com", password="DGLinker!", host='smtp.gmail.com')
 		subject = "DGLinker: There is something wrong with your project."
-		contents = "Dear user,\n\n  There is something wrong with your project： \n https://dglinker.rosalind.kcl.ac.uk/result/%s \n" % tempid
+		contents = "Dear user,\n\n  There is something wrong with your project: \n https://dglinker.rosalind.kcl.ac.uk/result/%s \n" % tempid
 		contents = contents + str(error)
 		contents = contents + '\n Your project will not continue. Please submit a new one. \n\n Best wishes \n DGLinker Service'
 		yag.send(email, subject, contents)
@@ -56,6 +60,7 @@ def error_page(tempid, err):
 	f1 = open('/var/www/kgp/FlaskApp/cache/error_file%s.txt' % tempid,'w')
 	f1.write(str(err))
 	f1.close()
+	
 
 def hyper_prob_at_least(pop_n, pop_true, draw_n, draw_true):
     #prob of at least h hits is i - cdf(h-1)
@@ -87,14 +92,17 @@ def _prepare():
 		f1 = open('/var/www/kgp/FlaskApp/data/log.txt','a')
 		f1.write("\ntempid: %s, result:" % tempid)
 		f1.write(str(input_dict))
-		f1.write(str(request.form.getlist('filename')))
+		# f1.write(str(request.form.getlist('filename')))
 
 		email = str(input_dict['email'])
 		file_name = '/var/www/kgp/FlaskApp/cache/output_file%s.csv' % tempid
 		file_list = request.form.getlist('filename')
-		uploaded_files = request.files.getlist("file[]")
-		k_value = str(input_dict['kvalue'])
-
+		uploaded_files = request.files.getlist("uploadfile")
+		# f1.write(str(uploaded_files))
+		try:
+			k_value = str(input_dict['kvalue'])
+		except:
+			k_value = False
 
 		for file in uploaded_files:
 			if file and allowed_file(file.filename):
@@ -105,6 +113,8 @@ def _prepare():
 		for f in file_list:
 			f = f.strip().split('/')
 			file_name_list.append(f[-1])
+
+		f1.write(str(file_list))
 
 		with open(file_name,'w') as wfd:
 			judge = 0
@@ -143,10 +153,36 @@ def _prepare():
 def send_start(email, tempid):
 	yag = yagmail.SMTP( user="dglinker.service@gmail.com", password="DGLinker!", host='smtp.gmail.com')
 	subject = "DGLinker: Your project has been submitted."
-	contents = "Dear user,\n\n Your project has been submited. You can find your result at the following link when the job will be completed: \n https://dglinker.rosalind.kcl.ac.uk/result/%s \n\n Best wishes, \n The DGLinker Team" % tempid
+	contents = "Dear user,\n\n Your project has been submited. You can find your result at the following link when the job will be completed: \n https://dglinker.rosalind.kcl.ac.uk/result/%s \nPlease note that the results will be deleted after 14 days. If you want to keep the results, please download them. \n\n Best wishes, \n The DGLinker Team" % tempid
 	yag.send(email, subject, contents)
 
+def queue_system(tempid):
+	while True:
+		queuing = open('/var/www/kgp/FlaskApp/data/queue.txt','r')
+		start = 0
+		done = 0
+		for line in queuing:
+			if 'start' in line:
+				start += 1
+			elif 'done' in line:
+				done += 1
+		if start - done <= 5:
+			queuing.close()
+			break
+		else:
+			queuing.flush()
+			time.sleep(120)
+			f1 = open('/var/www/kgp/FlaskApp/data/wait.txt','a')
+			f1.write(str(tempid)+' waiting...\n')
+			f1.close()
+
+			
 def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, input_name,keywords,k_value):
+	queue_system(tempid)
+	queue = open('/var/www/kgp/FlaskApp/data/queue.txt','a')
+	queue.write(str(tempid)+' start\n')
+	queue.close()
+
 	if phenotype == "pheno":
 		voca = pd.read_csv('/var/www/kgp/FlaskApp/data/vocabulary.csv',header=0,index_col=0)
 		f1 = open('/var/www/kgp/FlaskApp/data/log.txt','a')
@@ -160,10 +196,14 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 						row = row.strip().split(',')
 						if str(i).strip().lower() in row[1].strip().lower():
 							matched_diseidlist.append(row[0])
-							phenotype_used.append(row[1])
+							if row[1] not in phenotype_used:
+								phenotype_used.append(row[1])
 				else:
-					matched_diseid = voca.index[voca['diseaseName'] == str(i)].tolist()
-					matched_diseidlist.append(matched_diseid[0])
+					try:
+						matched_diseid = voca.index[voca['diseaseName'] == str(i)].tolist()
+						matched_diseidlist.append(matched_diseid[0])
+					except:
+						pass
 
 		f2 = open(file_name,'r') #dataset, 5 columns
 		merge_filename = "/var/www/kgp/FlaskApp/cache/merged_file%s.csv" % tempid
@@ -171,15 +211,17 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 			new.write('Source node name,Source node type,Relationship type,Target node type,Target node name\n')
 			for line in f2:
 				line_list = line.strip().split(',')
-				if line_list[4] in matched_diseidlist:
-					new.write('%s,%s,%s,%s,%s\n' % (line_list[0],line_list[1],line_list[2],line_list[3],matched_diseidlist[0]))
-				else:
-					new.write(line)
+				try:
+					if line_list[4] in matched_diseidlist:
+						new.write('%s,%s,%s,%s,%s\n' % (line_list[0],line_list[1].lower(),line_list[2].lower(),line_list[3].lower(),matched_diseidlist[0]))
+					else:
+						new.write('%s,%s,%s,%s,%s\n' % (line_list[0],line_list[1].lower(),line_list[2].lower(),line_list[3].lower(),line_list[4]))
+				except:
+					pass
 	elif phenotype == "defined":
 		voca = pd.read_csv('/var/www/kgp/FlaskApp/data/vocabulary.csv',header=0,index_col=0)
 		matched_diseidlist = []
 		phenotype_used = []
-		f1 = open('/var/www/kgp/FlaskApp/data/log.txt','a')
 		for i in input_name:
 			if i != '':
 				if keywords == "True":
@@ -188,12 +230,15 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 						row = row.strip().split(',')
 						if str(i).strip().lower() in row[1].lower():
 							matched_diseidlist.append(row[0])
-							phenotype_used.append(row[1])
-							f1.write(row[0])
-							f1.write(row[1])
+							if row[1] not in phenotype_used:
+								phenotype_used.append(row[1])
+							
 				else:
-					matched_diseid = voca.index[voca['diseaseName'] == str(i)].tolist()
-					matched_diseidlist.append(matched_diseid[0])
+					try:
+						matched_diseid = voca.index[voca['diseaseName'] == str(i)].tolist()
+						matched_diseidlist.append(matched_diseid[0])
+					except:
+						pass
 		f2 = open(file_name,'r') #dataset,5 columns
 		merge_filename = "/var/www/kgp/FlaskApp/cache/merged_file%s.csv" % tempid
 		with open(merge_filename,'w') as new:
@@ -203,8 +248,11 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 					new.write('%s,%s,%s,%s,%s\n' % (str(i),'gene','gene_disease_association','disease',str(matched_diseidlist[0])))
 			for line in f2:
 				line_list = line.strip().split(',')
-				if line_list[4] not in matched_diseidlist:
-					new.write(line)
+				try:
+					if line_list[4] not in matched_diseidlist: # if in, pass
+						new.write('%s,%s,%s,%s,%s\n' % (line_list[0],line_list[1].lower(),line_list[2].lower(),line_list[3].lower(),line_list[4]))
+				except:
+					pass
 	elif phenotype == "from_genes":
 		f2 = open(file_name,'r') #dataset,5 columns
 		merge_filename = "/var/www/kgp/FlaskApp/cache/merged_file%s.csv" % tempid
@@ -213,14 +261,13 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 			for i in gene_list:
 				new.write('%s,%s,%s,%s,%s\n' % (str(i),'gene','gene_disease_association','disease','USER_DEFINED_DISEASE'))
 			for line in f2:
-				new.write(line)
+				line_list = line.strip().split(',')
+				try:
+					new.write('%s,%s,%s,%s,%s\n' % (line_list[0],line_list[1].lower(),line_list[2].lower(),line_list[3].lower(),line_list[4]))
+				except:
+					pass
 
-	data = pd.read_csv(merge_filename, header=0, error_bad_lines=False, low_memory=False)
-	newDf = data.drop_duplicates()
-	newDf.to_csv("/var/www/kgp/FlaskApp/cache/new_merged_file%s.csv" % tempid, index=False)
-	merge_filename = "/var/www/kgp/FlaskApp/cache/new_merged_file%s.csv" % tempid
-
-	order_dict = pd.read_csv(merge_filename,header=0,index_col=0)
+	order_dict = pd.read_csv(merge_filename,header=0,index_col=0, error_bad_lines=False, low_memory=False)
 	order_list = []
 	for i in order_dict['Relationship type']:
 		if i not in order_list:
@@ -239,6 +286,10 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 		f1 = open('/var/www/kgp/FlaskApp/cache/error_file%s.txt' % tempid,'w')
 		f1.write(str(err))
 		f1.close()
+		queue = open('/var/www/kgp/FlaskApp/data/queue.txt','a')
+		queue.write(str(tempid)+' done\n')
+		queue.close()
+		time.sleep(20)
 		return render_template('error.html', tempid=tempid, error=err)
 
 	try:
@@ -248,6 +299,10 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 		f1 = open('/var/www/kgp/FlaskApp/cache/error_file%s.txt' % tempid,'w')
 		f1.write(str(err))
 		f1.close()
+		queue = open('/var/www/kgp/FlaskApp/data/queue.txt','a')
+		queue.write(str(tempid)+' done\n')
+		queue.close()
+		time.sleep(20)
 		return render_template('error.html', tempid=tempid, error=err)
 
 	ep.to_predict = 'gene_disease_association'
@@ -256,8 +311,6 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	if k_value:
 		xv_results = []
 		xv = ep.k_fold(target = str(target_name), k = int(k_value), calculate_auc = False) # , int(k_value)
-		f1 = open('/var/www/kgp/FlaskApp/data/log.txt','a')
-		f1.write(str(xv))
 		if xv:
 			for fold in xv:
 				fold['objective'] = "J"
@@ -315,7 +368,13 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 			xv_avg = gr[keep].mean()
 			xv_avg.reset_index(inplace=True)
 			model_performance.write("%s\t%s\n" % ('The average performance improvement vs random', '%.3f' % xv_avg['fc_hit_rate']))
+	else:
+		model_performance = open('/var/www/kgp/FlaskApp/model_results/model_performance_%s.txt' % tempid, 'a')
+		model_performance.write("The total number of folds\t0\nThe number of folds could be trained\t0\nThe number of successful and significantly enriched folds\t0\nThe average performance improvement vs random\t0\n")
 
+	input_genes = ep.getKnown(target=target_name)
+
+	
 	try:
 		result = ep.predict(target=target_name, calculate_auc=True, return_scores=True)
 	except Exception as err:
@@ -323,16 +382,29 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 		f1 = open('/var/www/kgp/FlaskApp/cache/error_file%s.txt' % tempid,'w')
 		f1.write(str(err))
 		f1.close()
+		queue = open('/var/www/kgp/FlaskApp/data/queue.txt','a')
+		queue.write(str(tempid)+' done\n')
+		queue.close()
+		time.sleep(20)
 		return render_template('error.html', tempid=tempid, error=err)
 	
+	if not result['model_built']:
+		err = 'The selected networks have 0 predictor overlap. You can select more databases in the same type and have another try.'
+		send_error(email, tempid, err)
+		f1 = open('/var/www/kgp/FlaskApp/cache/error_file%s.txt' % tempid,'w')
+		f1.write(str(err))
+		f1.close()
+		queue = open('/var/www/kgp/FlaskApp/data/queue.txt','a')
+		queue.write(str(tempid)+' done\n')
+		queue.close()
+		time.sleep(20)
+		return render_template('error.html', tempid=tempid, error=err)
+		
 	new_predictions = result['new_hits']
 	known_predictions = result['known_hits']
+	all_predictions = result['all_hits']
 	weights = result['weights']
 	scores = ep.getScores(target_name, weights)
-
-	# for i in range(len(new_predictions)):
-		# ranking.append([scores[i][0],scores[i][1]])
-		# ranking.append(scores[i][0])
 
 	result_file = open('/var/www/kgp/FlaskApp/cache/result_file%s.txt' % tempid, 'a')
 	job_summary = open('/var/www/kgp/FlaskApp/model_results/job_summary_%s.txt' % tempid, 'a')
@@ -362,7 +434,12 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 			result_file.write("%s\t%s\n" % ('Phenotype(s) Used', str([i for i in input_name])))
 			job_summary.write("%s\t%s\n" % ('Predict Mode', 'Predict from Phenotype(s)'))
 			job_summary.write("%s\t%s\n" % ('Phenotype(s) Used', ', '.join(([str(i) for i in input_name]))))
-		result_file.write("%s\t%s\n" % ('Known Genes',result['known_hits']))
+		result_file.write("%s\t%s\n" % ('Input Known Genes',input_genes))
+		job_summary.write("%s\t%s\n" % ('Input Known Genes',', '.join(input_genes)))
+		result_file.write("%s\t%s\n" % ('Number of Input Known Genes',len(input_genes)))
+		job_summary.write("%s\t%s\n" % ('Number of Input Known Genes',len(input_genes)))
+		
+
 	elif phenotype == "defined":
 		if keywords == 'True':
 			result_file.write("%s\t%s\n" % ('Predict Mode', "Predict from User-defined Disease(s)"))
@@ -378,20 +455,20 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 			job_summary.write("%s\t%s\n" % ('Predict Mode', "Predict from User-defined Disease(s)"))
 			job_summary.write("%s\t%s\n" % ('Disease(s) Defined', str(input_name)))
 			job_summary.write("%s\t%s\n" % ('By Genes', str(gene_list)))
+
 	elif phenotype == "from_genes":
 		result_file.write("%s\t%s\n" % ('Predict Mode', "Predict from Gene(s)"))
 		result_file.write("%s\t%s\n" % ('Genes Used', str(gene_list)))
 		job_summary.write("%s\t%s\n" % ('Predict Mode', "Predict from Gene(s)"))
 		job_summary.write("%s\t%s\n" % ('Genes Used', str(gene_list)))
 
-	result_file.write("%s\t%s\n" % ('Total Number of Genes','%d' %  result['hits_total']))
-	result_file.write("%s\t%s\n" % ('Number of Predicted Genes','%d' %  result['hits_new']))
+	result_file.write("%s\t%s\n" % ('Total Number of Predicted Genes','%d' %  result['hits_total']))
+	result_file.write("%s\t%s\n" % ('Number of New Predicted Genes','%d' %  result['hits_new']))
 	hits_known = result['hits_total'] - result['hits_new']
-	result_file.write("%s\t%s\n" % ('Number of Known Genes', '%d' % hits_known))
-	job_summary.write("%s\t%s\n" % ('Known Genes',', '.join(result['known_hits'])))
-	job_summary.write("%s\t%s\n" % ('Total Number of Genes','%d' %  result['hits_total']))
-	job_summary.write("%s\t%s\n" % ('Number of Predicted Genes','%d' %  result['hits_new']))
-	job_summary.write("%s\t%s\n" % ('Number of Known Genes', '%d' % hits_known))
+	result_file.write("%s\t%s\n" % ('Number of Known Predicted Genes', '%d' % hits_known))
+	job_summary.write("%s\t%s\n" % ('Total Number of Predicted Genes','%d' %  result['hits_total']))
+	job_summary.write("%s\t%s\n" % ('Number of New Predicted Genes','%d' %  result['hits_new']))
+	job_summary.write("%s\t%s\n" % ('Number of Known Predicted Genes', '%d' % hits_known))
 
 	# result_file.write("%s\t%s\n" % ('ACC of the Model','%.3f' % result['ACC']))
 	# result_file.write("%s\t%s\n" % ('AUC of the Model','%.3f' % result['auc']))
@@ -429,7 +506,8 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	top_100_new = top_new[0:100]
 	# graph file for top_50_all
 	top_50_all = [tup[0] for tup in ranking][0:50]
-	top_200_all = [tup[0] for tup in ranking][0:200]
+
+	
 	# get all genes:
 	# for key in result['scores']['scores']:
 
@@ -440,9 +518,12 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	path = os.path.join(parent_dir, directory)
 	if not os.path.exists(path):
 		os.mkdir(path)
-	for i in top_200_all:
+	for i in all_predictions:
 		info = result['scores']['breakdown'][i]
-		pie_chart(tempid, info, i)
+		try:
+			pie_chart(tempid, info, i)
+		except:
+			pass
 	pie_chart(tempid, result['weights'], 'Total')
 
 	# network graph
@@ -451,17 +532,27 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	with open('/var/www/kgp/FlaskApp/cache/raw_graph_file%s.csv' % tempid, 'w') as raw_graph_file:
 		for line in raw_file:
 			linelist = line.strip().split(',')
-			if linelist[0] in top_50_all and line not in line_duplicate:
+			if linelist[0] in all_predictions and line not in line_duplicate:
 				raw_graph_file.write(line)
+
+	# get relationships that actually used in networks
+	info = result['weights']
+	actual_edges = []
+	a = list(info.keys())
+	b = list(info.values())
+	for i in range(len(b)):
+		if b[i] > 0:
+			actual_edges.append(a[i])
 
 	with open('/var/www/kgp/FlaskApp/cache/raw_graph_file%s.csv' % tempid, 'r') as reader:
 		d = OrderedDict([('Source node name', []), ('Source node type', []), ('Target node type', []), ('Target node name', [])])
 		for row in reader:
 			row = row.strip().split(',')
-			d['Source node name'].append(row[0])
-			d['Source node type'].append(row[1])
-			d['Target node type'].append(row[3])
-			d['Target node name'].append(row[4])
+			if row[2] in actual_edges:
+				d['Source node name'].append(row[0])
+				d['Source node type'].append(row[1])
+				d['Target node type'].append(row[3])
+				d['Target node name'].append(row[4])
 
 	graph_file = open('/var/www/kgp/FlaskApp/cache/graph_file%s.txt' % tempid, 'a')
 	download_graph_file = open('/var/www/kgp/FlaskApp/model_results/graph_file%s.txt' % tempid, 'a')
@@ -495,37 +586,25 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	if not os.path.exists('/var/www/kgp/FlaskApp/static/graph_dir%s' % tempid):
 		os.mkdir('/var/www/kgp/FlaskApp/static/graph_dir%s' % tempid)
 	
-	for gene in top_50_all:
-		with open('/var/www/kgp/FlaskApp/static/graph_dir%s/%s.txt' % (tempid,gene), 'a') as each:   
-			each.write('Gene\tOthers\tGene_class\tOthers_Class\tTotal number of interactions gene\tTotal number of interactions others\n')
-
-	graph_dict = {}
-
-	with open('/var/www/kgp/FlaskApp/cache/graph_file%s.txt' % tempid, 'r') as reader:
-		allrow = []
-		for row in reader:
-			rowline = row.strip().split('\t')
-			if rowline not in allrow:
-				allrow.append(rowline)
-				graph_dict.setdefault(str(rowline[0]),[]).append(str(rowline[1]))
-				with open('/var/www/kgp/FlaskApp/static/graph_dir%s/%s.txt' % (tempid,rowline[0]), 'a') as each:
-					each.write(row)
-		
-	for gene in graph_dict:
-		alldata = []
-		for others in graph_dict[gene]:
-			for i in allrow:
-				if others == i[1] and gene !=i[0] and i not in alldata:
-					with open('/var/www/kgp/FlaskApp/static/graph_dir%s/%s.txt' % (tempid,gene), 'a') as each:
-						each.write('\t'.join(i))
-						each.write('\n')
-						alldata.append(i)
+	graph = pd.read_csv('/var/www/kgp/FlaskApp/cache/graph_file%s.txt' % tempid,sep='\t', names=['Gene', 'Others', 'Gene_class', 'Others_Class', 'Total number of interactions gene', 'Total number of interactions others'])
+	# graph_50 = graph[graph['Gene'].isin(top_50_all)]
+	predictor = reduce(operator.add,list(result['predictors'].values()))
+	graph_predictor = graph[graph['Others'].isin(predictor) & graph['Gene'].isin(input_genes)] # subgraphs to be get
 	
+	for gene in top_50_all: # result['all_hits']
+		data = graph[graph['Gene'] == gene]
+		# data = graph[graph['Gene'].isin([gene]) & graph['Others'].isin(predictor)] # get interaction related to the selected gene and predictors
+		# subgraph = graph_50[graph_50['Others'].isin(list(data['Others']))] # get interaction related to gene ralated others
+		subgraph = graph_predictor[graph_predictor['Others'].isin(list(data['Others']))] # get interaction related to input gene ralated others
+		data = data.append(subgraph, ignore_index=True)
+		data = data.drop_duplicates()
+		# data = data[data.groupby('Others').Others.transform(len) > 1] # delete others which only appear once
+		data.to_csv('/var/www/kgp/FlaskApp/static/graph_dir%s/%s.txt' % (tempid,gene),index=False,sep='\t')
+
 	folder = '/var/www/kgp/FlaskApp/static/graph_dir%s' % tempid
-	
 	threa = Thread(target=net_visualization, args=(folder,))
 	threa.start()
-
+	
 	#enrichr
 	# make directory for enrichr
 	parent_dir = '/var/www/kgp/FlaskApp/static/'
@@ -545,7 +624,16 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	}
 	response = requests.post(ENRICHR_URL, files=payload, timeout=80000)
 	if not response.ok:
-		raise Exception('Error analyzing gene list')
+		err = 'There are no new predicted genes. All genes predicted to be linked to the phenotypes are known ones. This is a consequence of the frequent non-complete overlap between input genes and the genes present in the model databases '
+		send_error(email, tempid, err)
+		f1 = open('/var/www/kgp/FlaskApp/cache/error_file%s.txt' % tempid,'w')
+		f1.write(str(err))
+		f1.close()
+		queue = open('/var/www/kgp/FlaskApp/data/queue.txt','a')
+		queue.write(str(tempid)+' done\n')
+		queue.close()
+		time.sleep(20)
+		return render_template('error.html', tempid=tempid, error=err)
 	iddata = json.loads(response.text) # dict()
 	userID.append(iddata['userListId'])
 
@@ -638,13 +726,16 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 		f.close()
 
 	send_result(email, tempid)
+	queue = open('/var/www/kgp/FlaskApp/data/queue.txt','a')
+	queue.write(str(tempid)+' done\n')
+	queue.close()
 	
 
 def send_result(email, tempid):
 	if email != '':
 		yag = yagmail.SMTP( user="dglinker.service@gmail.com", password="DGLinker!", host='smtp.gmail.com')
 		subject = "Your result from DGLinker."
-		contents = "Dear user,\n\n Please find attached a summary of your results. You can download the complete results at the following link: \n https://dglinker.rosalind.kcl.ac.uk/result/%s \n\n Best wishes, \n The DGLinker Team" % tempid
+		contents = "Dear user,\n\n Please find attached a summary of your results. You can download the complete results at the following link: \n https://dglinker.rosalind.kcl.ac.uk/result/%s \nPlease note that the results will be deleted after 14 days. If you want to keep the results, please download them. \n\n Best wishes, \n The DGLinker Team" % tempid
 		attlist = ['/var/www/kgp/FlaskApp/cache/result_file%s.txt' % tempid]
 		yag.send(email, subject, contents, attlist)
 
@@ -704,6 +795,8 @@ def result(tempid):
 		for line in model_performance:
 			line = line.strip().split('\t')
 			performance.append(line[1])
+		
+
 
 		return render_template('result.html',result=result, all_hits=all_hits, tempid=tempid, performance=performance)
 	else:
@@ -755,12 +848,15 @@ def net_visualization(folder):
 				got_net.add_node(dst, dst, title=dst, group=7, shape = "box", size = int(weight_2)+50, physics = True , level = 2)
 			if others_class == "expression" :
 				got_net.add_node(dst, dst, title=dst, group=8, shape = "box", size = int(weight_2)+50, physics = True , level = 2)
+			if others_class == "molecule" :
+				got_net.add_node(dst, dst, title=dst, group=9, shape = "box", size = int(weight_2)+50, physics = True , level = 2)
+			
 			
 			got_net.add_edge(src, dst, physics = True)
 
 			neighbor_map = got_net.get_adj_list()
 
-	# add neighbor data to node hover data
+		# add neighbor data to node hover data
 		for node in got_net.nodes:
 			node["title"] += "<br>Neighbors:<br>" + "<br>".join(neighbor_map[node["id"]])
 			node["value"] = len(neighbor_map[node["id"]])
@@ -939,25 +1035,27 @@ def get_enrichment_results(tempid,ID,library):
 def pie_chart(tempid, info, i):
 	graphname = '/var/www/kgp/FlaskApp/static/pie_chart_%s/%s_%s.png' % (tempid,tempid,i)
 	plt.figure()
-	labels = [i.replace('_', ' ') for i in info.keys()]
+	x = [i.replace('_', ' ') for i in info.keys()]
 	sizes = [i/sum(info.values())*100 for i in info.values()]
+	labels = ['{0} - {1:1.2f} %'.format(i,j) for i,j in zip(x, sizes)]
 	colors = ['lightsalmon', 'peachpuff', 'lightblue', 'bisque', 'plum', 'khaki', 'turquoise','lightgreen'][:len(sizes)]
-	patches,text1,text2 = plt.pie(sizes,
-						labels=labels,
+	patches,text = plt.pie(sizes,
 						colors=colors,
-						labeldistance = 1.1,
-						autopct = '%3.2f%%',
 						shadow = False,
 						startangle =90,
 						pctdistance = 0.6)
+	patches, labels, dummy =  zip(*sorted(zip(patches, labels, sizes),
+											key=lambda x: x[2],
+											reverse=True))
 	plt.axis('equal')
 	plt.title(str(i))
+	plt.legend(patches, labels, loc='upper right', bbox_to_anchor=(-0.1, 1.),fontsize=8)
 	# plt.legend()
 	# plt.tight_layout(rect=[0.03, 0.05, 0.97, 1])
 	# plt.autoscale()
 	plt.savefig(graphname, dpi=100, transparent=True, bbox_inches='tight')
 	plt.clf()
-	plt.close()
+	plt.close('all')
 
 	
 def enrichr_grpah(tempid,ID,library,graphname,filename):
@@ -1004,7 +1102,7 @@ def enrichr_grpah(tempid,ID,library,graphname,filename):
 		plt.tight_layout()
 		fig.savefig(graphname, dpi=400)
 		plt.clf()
-		plt.close()
+		plt.close('all')
 
 
 
@@ -1022,12 +1120,13 @@ def downloadFile(tempid):
 		filelist5 = search(dirpath3, '.png')
 
 		for f in filelist1 + filelist2 + filelist3 + filelist4 + filelist5:
-			addfile('/var/www/kgp/FlaskApp/cache/zip%s.zip' % tempid, f)
+			addfile('/var/www/kgp/FlaskApp/cache/zip%s.zip' % tempid, f,-2)
+		addfile('/var/www/kgp/FlaskApp/cache/zip%s.zip' % tempid, '/var/www/kgp/FlaskApp/README.TXT',-1)
 	return send_file(path, as_attachment=True)
 
-def addfile(zipfilename, filename):
-	dir = "/".join([i for i in filename.strip().split("/")][:-2])
-	new_filename = "/".join([i for i in filename.strip().split("/")][-2:])
+def addfile(zipfilename, filename,i):
+	dir = "/".join([i for i in filename.strip().split("/")][:i])
+	new_filename = "/".join([i for i in filename.strip().split("/")][i:])
 	os.chdir(dir)
 	with zipfile.ZipFile(zipfilename, 'a') as z:
 		z.write(new_filename)
@@ -1046,7 +1145,12 @@ def _find():
 	if request.method == 'POST':
 		input_dict = request.form.to_dict()
 		tempid = input_dict['jobname']
-		return redirect(url_for('result',tempid=tempid))
+		if os.path.exists('/var/www/kgp/FlaskApp/model_results/results_%s.txt' % tempid) or os.path.exists('/var/www/kgp/FlaskApp/cache/output_file%s.csv' % tempid) or os.path.exists('/var/www/kgp/FlaskApp/cache/error_file%s.txt' % tempid):
+			return redirect(url_for('result',tempid=tempid))
+		else:
+			return render_template('none.html')
+	else:
+		return render_template('none.html')
 
 
 @app.route('/downloads')
