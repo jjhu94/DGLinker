@@ -1,13 +1,16 @@
 import os
 os.environ['MPLCONFIGDIR'] = "/var/www/kgp/FlaskApp/graph"
-import matplotlib																										 
+import matplotlib
 matplotlib.use('Agg')
+
 
 from collections import OrderedDict
 from collections import defaultdict
 from collections import Counter
+from .Enrichment import Enricher
 from flask import flash, Flask, make_response, redirect, render_template, request, send_file, url_for
 from functools import reduce
+from .net_visualisation import net_visualization
 from pyvis.network import Network
 from scipy.stats import hypergeom
 from threading import Thread
@@ -308,6 +311,7 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	ep.to_predict = 'gene_disease_association'
 	# ep.network_order = order_list  # input_dict['order']  # ['HAS_SIDE_EFFECT', 'DRUG_TARGETS', 'INDICATED_FOR']
 
+	# k-fold validation
 	if k_value:
 		xv_results = []
 		xv = ep.k_fold(target = str(target_name), k = int(k_value), calculate_auc = False) # , int(k_value)
@@ -374,7 +378,7 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 
 	input_genes = ep.getKnown(target=target_name)
 
-	
+	# to predict
 	try:
 		result = ep.predict(target=target_name, calculate_auc=True, return_scores=True)
 	except Exception as err:
@@ -399,13 +403,41 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 		queue.close()
 		time.sleep(20)
 		return render_template('error.html', tempid=tempid, error=err)
-		
+
+	if float(result['auc']) < 0.5:
+		err = "The AUC of the model built is less than 0.5."
+		send_error(email, tempid, err)
+		f1 = open('/var/www/kgp/FlaskApp/cache/error_file%s.txt' % tempid,'w')
+		f1.write(str(err))
+		f1.close()
+		queue = open('/var/www/kgp/FlaskApp/data/queue.txt','a')
+		queue.write(str(tempid)+' done\n')
+		queue.close()
+		time.sleep(20)
+		return render_template('error.html', tempid=tempid, error=err)	
+	# get result	
 	new_predictions = result['new_hits']
 	known_predictions = result['known_hits']
 	all_predictions = result['all_hits']
 	weights = result['weights']
 	scores = ep.getScores(target_name, weights)
 
+	# bed files
+	directory = '/var/www/kgp/FlaskApp/model_results/results_genomic_regions_%s' % tempid
+	if not os.path.exists(directory):
+		os.mkdir(directory)
+	hg_19 = pd.read_csv('/var/www/kgp/FlaskApp/data/genes_hg19.bed', sep='\t',header=None,names=['hg19','gene'])
+	hg_38 = pd.read_csv('/var/www/kgp/FlaskApp/data/genes_hg38.bed', sep='\t',header=None,names=['hg38','gene'])
+	input_genes_hg19 = hg_19[hg_19['gene'].isin(input_genes)]
+	input_genes_hg38 = hg_38[hg_38['gene'].isin(input_genes)]
+	predicted_genes_hg19 = hg_19[hg_19['gene'].isin(all_predictions)]
+	predicted_genes_hg38 = hg_38[hg_38['gene'].isin(all_predictions)]
+	input_genes_hg19.to_csv('%s/input_genes_hg19.bed' % directory, sep='\t',index=False)
+	input_genes_hg38.to_csv('%s/input_genes_hg38.bed' % directory, sep='\t',index=False)
+	predicted_genes_hg19.to_csv('%s/predicted_genes_hg19.bed' % directory, sep='\t',index=False)
+	predicted_genes_hg38.to_csv('%s/predicted_genes_hg38.bed' % directory, sep='\t',index=False)
+
+	# job summary and model performance
 	result_file = open('/var/www/kgp/FlaskApp/cache/result_file%s.txt' % tempid, 'a')
 	job_summary = open('/var/www/kgp/FlaskApp/model_results/job_summary_%s.txt' % tempid, 'a')
 	download_results = open('/var/www/kgp/FlaskApp/model_results/results_%s.txt' % tempid, 'a')
@@ -444,23 +476,30 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 		if keywords == 'True':
 			result_file.write("%s\t%s\n" % ('Predict Mode', "Predict from User-defined Disease(s)"))
 			result_file.write("%s\t%s\n" % ('Disease(s) Defined', str([i for i in phenotype_used])))
-			result_file.write("%s\t%s\n" % ('By Genes', str(gene_list)))
+			result_file.write("%s\t%s\n" % ('By Genes', str(input_genes)))
+			result_file.write("%s\t%s\n" % ('Number of Genes Used',len(input_genes)))
 			job_summary.write("%s\t%s\n" % ('Predict Mode', "Predict from User-defined Disease(s)"))
 			job_summary.write("%s\t%s\n" % ('Disease(s) Defined', ', '.join(([str(i) for i in phenotype_used]))))
-			job_summary.write("%s\t%s\n" % ('By Genes', str(gene_list)))
+			job_summary.write("%s\t%s\n" % ('By Genes', str(input_genes)))
+			job_summary.write("%s\t%s\n" % ('Number of Genes Used',len(input_genes)))
+			
 		else:
 			result_file.write("%s\t%s\n" % ('Predict Mode', "Predict from User-defined Disease(s)"))
 			result_file.write("%s\t%s\n" % ('Disease(s) Defined', str(input_name)))
-			result_file.write("%s\t%s\n" % ('By Genes', str(gene_list)))
+			result_file.write("%s\t%s\n" % ('By Genes', str(input_genes)))
+			result_file.write("%s\t%s\n" % ('Number of Genes Used',len(input_genes)))
 			job_summary.write("%s\t%s\n" % ('Predict Mode', "Predict from User-defined Disease(s)"))
 			job_summary.write("%s\t%s\n" % ('Disease(s) Defined', str(input_name)))
-			job_summary.write("%s\t%s\n" % ('By Genes', str(gene_list)))
+			job_summary.write("%s\t%s\n" % ('By Genes', str(input_genes)))
+			job_summary.write("%s\t%s\n" % ('Number of Genes Used',len(input_genes)))
 
 	elif phenotype == "from_genes":
 		result_file.write("%s\t%s\n" % ('Predict Mode', "Predict from Gene(s)"))
-		result_file.write("%s\t%s\n" % ('Genes Used', str(gene_list)))
+		result_file.write("%s\t%s\n" % ('Genes Used', str(input_genes)))
+		result_file.write("%s\t%s\n" % ('Number of Genes Used', len(input_genes)))
 		job_summary.write("%s\t%s\n" % ('Predict Mode', "Predict from Gene(s)"))
-		job_summary.write("%s\t%s\n" % ('Genes Used', str(gene_list)))
+		job_summary.write("%s\t%s\n" % ('Genes Used', str(input_genes)))
+		job_summary.write("%s\t%s\n" % ('Number of Genes Used', len(input_genes)))
 
 	result_file.write("%s\t%s\n" % ('Total Number of Predicted Genes','%d' %  result['hits_total']))
 	result_file.write("%s\t%s\n" % ('Number of New Predicted Genes','%d' %  result['hits_new']))
@@ -478,20 +517,34 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	model_performance.write("%s\t%s\n" % ('F1 score of the Model','%.3f' % result['F1']))
 	model_performance.write("%s\t%s\n" % ('J of the Model','%.3f' % result['J']))
 
+
+	# ENSP ID
+	with open("/var/www/kgp/FlaskApp/data/genes_ENSP.txt", 'r') as f:
+		enspdict = {}
+		for row in f:
+			row = row.strip().split('\t')
+			enspdict[row[0]] = row[1]
+
+
 	result_file.write("%s\n" % 'More Information About Genes')
-	download_results.write("%s\n" % 'Rank\tAssociation type\tGene name\tScore')
+	download_results.write("%s\n" % 'Rank\tAssociation type\tGene name\tEnsemble protein ID\tScore')
 	# rank for all
 	ranking = sorted(result['scores']['scores'].items(), key=lambda item: item[1], reverse=True)
 	num = 0
 	top_new = []
 	for tup in ranking:
 		if tup[0] in known_predictions:
-			result_file.write("%d\t%s\t%s\t%.3f\n" % (num+1,'Known',tup[0],tup[1]))
-			download_results.write("%d\t%s\t%s\t%.3f\n" % (num+1,'Known',tup[0],tup[1]))
+			association = 'Known'
 		elif tup[0] in new_predictions:
-			result_file.write("%d\t%s\t%s\t%.3f\n" % (num+1,'Predicted',tup[0],tup[1]))
-			download_results.write("%d\t%s\t%s\t%.3f\n" % (num+1,'Predicted',tup[0],tup[1]))
+			association = 'Predicted'
 			top_new.append(tup[0])
+		try:
+			result_file.write("%d\t%s\t%s\t%s\t%.3f\n" % (num+1,association,tup[0],enspdict[tup[0]],tup[1]))
+			download_results.write("%d\t%s\t%s\t%s\t%.3f\n" % (num+1,association,tup[0],enspdict[tup[0]],tup[1]))
+		except:
+			result_file.write("%d\t%s\t%s\t%s\t%.3f\n" % (num+1,association,tup[0],'-',tup[1]))
+			download_results.write("%d\t%s\t%s\t%s\t%.3f\n" % (num+1,association,tup[0],'-',tup[1]))
+			
 		num += 1
 	result_file.flush()
 	result_file.close()
@@ -501,7 +554,7 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	download_results.close()
 	model_performance.flush()
 	model_performance.close()
-
+	
 	# top 100 for enrichr
 	top_100_new = top_new[0:100]
 	# graph file for top_50_all
@@ -511,21 +564,27 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	# get all genes:
 	# for key in result['scores']['scores']:
 
-
+	
 	# pie chart
 	parent_dir = '/var/www/kgp/FlaskApp/static/'
 	directory = 'pie_chart_%s' % tempid
 	path = os.path.join(parent_dir, directory)
 	if not os.path.exists(path):
 		os.mkdir(path)
+	
+	try:
+		pie_chart(tempid, result['weights'], 'Total')
+	except:
+		pass
+
 	for i in all_predictions:
 		info = result['scores']['breakdown'][i]
 		try:
 			pie_chart(tempid, info, i)
 		except:
 			pass
-	pie_chart(tempid, result['weights'], 'Total')
-
+	
+	
 	# network graph
 	line_duplicate = []
 	raw_file = open('/var/www/kgp/FlaskApp/cache/output_file%s.csv' % tempid, 'r')
@@ -565,7 +624,7 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 			if row not in dup:
 				dup.append(row)
 				row = row.strip().split('\t')
-				vocadict[row[0]] = row[1]
+				vocadict[row[0]] = row[1] # vocadict['C000965'] = 'AD'
 
 	genecount = Counter(d['Source node name'])
 	othercount = Counter(d['Target node name'])
@@ -575,11 +634,17 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 		else:
 			genetype = 'Known'
 		if d['Target node type'][i] == 'disease' and othercount[d['Target node name'][i]] > 1:
-			graph_file.write('%s\t%s\t%s\t%s\t%d\t%d\n' % (d['Source node name'][i],vocadict[d['Target node name'][i]],genetype,d['Target node type'][i],genecount[d['Source node name'][i]],othercount[d['Target node name'][i]]))
-			download_graph_file.write('%s\t%s\t%s\t%s\t%d\t%d\n' % (d['Source node name'][i],vocadict[d['Target node name'][i]],genetype,d['Target node type'][i],genecount[d['Source node name'][i]],othercount[d['Target node name'][i]]))
+			try:
+				graph_file.write('%s\t%s\t%s\t%s\t%d\t%d\n' % (d['Source node name'][i],vocadict[d['Target node name'][i]],genetype,d['Target node type'][i],genecount[d['Source node name'][i]],othercount[d['Target node name'][i]]))
+				download_graph_file.write('%s\t%s\t%s\t%s\t%d\t%d\n' % (d['Source node name'][i],vocadict[d['Target node name'][i]],genetype,d['Target node type'][i],genecount[d['Source node name'][i]],othercount[d['Target node name'][i]]))
+			except:
+				pass
 		elif d['Target node type'][i] != 'disease' and othercount[d['Target node name'][i]] > 1:
-			graph_file.write('%s\t%s\t%s\t%s\t%d\t%d\n' % (d['Source node name'][i],str(d['Target node name'][i]),genetype,d['Target node type'][i],genecount[d['Source node name'][i]],othercount[d['Target node name'][i]]))
-			download_graph_file.write('%s\t%s\t%s\t%s\t%d\t%d\n' % (d['Source node name'][i],str(d['Target node name'][i]),genetype,d['Target node type'][i],genecount[d['Source node name'][i]],othercount[d['Target node name'][i]]))
+			try:
+				graph_file.write('%s\t%s\t%s\t%s\t%d\t%d\n' % (d['Source node name'][i],str(d['Target node name'][i]),genetype,d['Target node type'][i],genecount[d['Source node name'][i]],othercount[d['Target node name'][i]]))
+				download_graph_file.write('%s\t%s\t%s\t%s\t%d\t%d\n' % (d['Source node name'][i],str(d['Target node name'][i]),genetype,d['Target node type'][i],genecount[d['Source node name'][i]],othercount[d['Target node name'][i]]))
+			except:
+				pass
 	graph_file.close()
 	download_graph_file.close()
 
@@ -589,11 +654,21 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	graph = pd.read_csv('/var/www/kgp/FlaskApp/cache/graph_file%s.txt' % tempid,sep='\t', names=['Gene', 'Others', 'Gene_class', 'Others_Class', 'Total number of interactions gene', 'Total number of interactions others'])
 	# graph_50 = graph[graph['Gene'].isin(top_50_all)]
 	predictor = reduce(operator.add,list(result['predictors'].values()))
-	graph_predictor = graph[graph['Others'].isin(predictor) & graph['Gene'].isin(input_genes)] # subgraphs to be get
+	f1 = open('/var/www/kgp/FlaskApp/data/log.txt','a')
+	f1.write(str(predictor))
+	f1.close()
+	predictor_name = []
+	for i in predictor:
+		try:
+			predictor_name.append(vocadict[i])
+		except:
+			predictor_name.append(i)
+
+	graph_predictor = graph[graph['Others'].isin(predictor_name) & graph['Gene'].isin(input_genes)] # subgraphs to be get
 	
 	for gene in top_50_all: # result['all_hits']
-		data = graph[graph['Gene'] == gene]
-		# data = graph[graph['Gene'].isin([gene]) & graph['Others'].isin(predictor)] # get interaction related to the selected gene and predictors
+		# data = graph[graph['Gene'] == gene]
+		data = graph[graph['Gene'].isin([gene]) & graph['Others'].isin(predictor_name)] # get interaction related to the selected gene and predictors
 		# subgraph = graph_50[graph_50['Others'].isin(list(data['Others']))] # get interaction related to gene ralated others
 		subgraph = graph_predictor[graph_predictor['Others'].isin(list(data['Others']))] # get interaction related to input gene ralated others
 		data = data.append(subgraph, ignore_index=True)
@@ -602,7 +677,7 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 		data.to_csv('/var/www/kgp/FlaskApp/static/graph_dir%s/%s.txt' % (tempid,gene),index=False,sep='\t')
 
 	folder = '/var/www/kgp/FlaskApp/static/graph_dir%s' % tempid
-	threa = Thread(target=net_visualization, args=(folder,))
+	threa = Thread(target=net_visualization, args=(folder,False,))
 	threa.start()
 	
 	#enrichr
@@ -613,117 +688,49 @@ def predict(tempid, email, file_name_list, file_name, gene_list, phenotype, inpu
 	if not os.path.exists(path):
 		os.mkdir(path)
 
-	# analyze_gene_list: top 100 new
-	userID = []
-	ENRICHR_URL = 'http://maayanlab.cloud/Enrichr/addList'
-	genes_str = '\n'.join(top_100_new)
-	description = 'top 100 new Genes'
-	payload = {
-		'list': (None, genes_str),
-		'description': (None, description)
-	}
-	response = requests.post(ENRICHR_URL, files=payload, timeout=80000)
-	if not response.ok:
-		err = 'There are no new predicted genes. All genes predicted to be linked to the phenotypes are known ones. This is a consequence of the frequent non-complete overlap between input genes and the genes present in the model databases '
-		send_error(email, tempid, err)
-		f1 = open('/var/www/kgp/FlaskApp/cache/error_file%s.txt' % tempid,'w')
-		f1.write(str(err))
-		f1.close()
-		queue = open('/var/www/kgp/FlaskApp/data/queue.txt','a')
-		queue.write(str(tempid)+' done\n')
-		queue.close()
-		time.sleep(20)
-		return render_template('error.html', tempid=tempid, error=err)
-	iddata = json.loads(response.text) # dict()
-	userID.append(iddata['userListId'])
-
-	# analyze_gene_list: known
-	ENRICHR_URL = 'http://maayanlab.cloud/Enrichr/addList'
-	genes_str = '\n'.join(known_predictions)
-	description = 'known Genes'
-	payload = {
-		'list': (None, genes_str),
-		'description': (None, description)
-	}
-	response = requests.post(ENRICHR_URL, files=payload, timeout=80000)
-	if not response.ok:
-		raise Exception('Error analyzing gene list')
-	iddata = json.loads(response.text) # dict()
-	userID.append(iddata['userListId'])
-
-	# analyze_gene_list: top 100 new
-	ENRICHR_URL = 'http://maayanlab.cloud/Enrichr/addList'
-	gene_list = top_100_new + known_predictions
-	genes_str = '\n'.join(gene_list)
-	description = 'top 100 new Genes + known Genes'
-	payload = {
-		'list': (None, genes_str),
-		'description': (None, description)
-	}
-	response = requests.post(ENRICHR_URL, files=payload, timeout=80000)
-	if not response.ok:
-		raise Exception('Error analyzing gene list')
-	iddata = json.loads(response.text) # dict()
-	userID.append(iddata['userListId'])
-
-	# get_enrichment_results
-	gene_set_list = ['ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X', 'KEGG_2019_Human', 'GO_Biological_Process_2018', 'GO_Cellular_Component_2018', 'GO_Molecular_Function_2018', 'OMIM_Disease', 'GWAS_Catalog_2019','DSigDB', 'Human_Gene_Atlas']
 	namelist = ['New', 'Known', 'Union']
-	for library in gene_set_list:
-		i = -1   
-		for ID in userID:
-			i += 1
-			try:
-				ENRICHR_URL = 'http://maayanlab.cloud/Enrichr/export'
-				query_string = '?userListId=%s&filename=%s&backgroundType=%s'
-				user_list_id = ID
-				filename = '/var/www/kgp/FlaskApp/static/enrichr%s/%s_%s_%s.txt' % (tempid,tempid,namelist[i],library)
-				gene_set_library = library # str(library)
-				url = ENRICHR_URL + query_string % (user_list_id, filename, gene_set_library)
-				response = requests.get(url, stream=True)
-				with open(filename, 'wb') as f:
-					for chunk in response.iter_content(chunk_size=1024): 
-						if chunk:
-							f.write(chunk)
-			except Exception as e:
-				pass
-			# thread = Thread(target=get_enrichment_results, args=(tempid,ID,library,))
-			# thread.start()
-			# time.sleep(5)
-	# time.sleep(30)	 
-	f = open ('/var/www/kgp/FlaskApp/static/enrichr%s/apidone.txt' % tempid, 'w')
-	for ID in userID:
-		f.write('%s,' % ID)
+	gene_list = [top_100_new,known_predictions,all_predictions]
+	files = [
+			'GWAS v1.2.csv',
+			'OMIM v2021-04.csv',
+			'KEGG v2021-03.csv',
+			'DSigDB v1.0.csv',
+			'ENCODE and ChEA Consensus TFs from ChIP-X v1.0.csv',
+			'ArrayExpress Atlas (experiment E-MTAB-513 Illumina body map) v2021-02.csv',
+		]
+	
+	enr = Enricher(backgrounds_files=files)
+	files = files + ['GO']
+	go_names = ['GO Biological Process v2021-04','GO Cellular Component v2021-04','GO Molecular Function v2021-04']
+	abstr = ['BP','CC','MF']
+	for i in range(3):
+		for db in files:
+			db = db.replace('.csv','')
+			res = enr.enrichment(gene_list[i], return_filter='all', dataset=db)
+			enr.to_tsv('/var/www/kgp/FlaskApp/static/enrichr%s/%s_%s_%s.txt' % (tempid,tempid,namelist[i],db), res)
+			if db == 'GO':
+				for j in range(len(go_names)):
+					data = pd.read_csv('/var/www/kgp/FlaskApp/static/enrichr%s/%s_%s_%s.txt' % (tempid,tempid,namelist[i],'GO'),sep='\t')
+					data = data[data[data.columns[1]] == abstr[j]]
+					data.to_csv('/var/www/kgp/FlaskApp/static/enrichr%s/%s_%s_%s.txt' % (tempid,tempid,namelist[i],go_names[j]),index=False,header=['# GO','NS','enrichment','name','ratio_in_study','ratio_in_pop','p_uncorrected','depth','study_count','p_fdr_bh','study_items'],sep='\t')
+					graphname = '/var/www/kgp/FlaskApp/static/enrichr%s/%s_%s_%s.png' % (tempid,tempid,namelist[i],go_names[j])
+					filename = '/var/www/kgp/FlaskApp/static/enrichr%s/%s_%s_%s.txt' % (tempid,tempid,namelist[i],go_names[j])
+					try:
+						enrichr_grpah(tempid,go_names[j],graphname,filename)
+					except:
+						pass
+			else:
+				graphname = '/var/www/kgp/FlaskApp/static/enrichr%s/%s_%s_%s.png' % (tempid,tempid,namelist[i],db)
+				filename = '/var/www/kgp/FlaskApp/static/enrichr%s/%s_%s_%s.txt' % (tempid,tempid,namelist[i],db)
+				try:
+					enrichr_grpah(tempid,db,graphname,filename)
+				except:
+					pass
+
+
+	f = open ('/var/www/kgp/FlaskApp/static/enrichr%s/graphdone.txt' % tempid, 'w')
+	f.write('This file is used to claim that all of the enrichment and corresponding visulization are done.')
 	f.close()
-
-	if not os.path.exists('/var/www/kgp/FlaskApp/static/enrichr%s/graphdone.txt' % tempid):
-		f = open ('/var/www/kgp/FlaskApp/static/enrichr%s/apidone.txt' % tempid, 'r')
-		userID = []
-		for line in f:
-			line = line.strip().split(',')
-			for i in line:
-				if i != '':
-					userID.append(i)
-		gene_set_list = ['ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X', 'KEGG_2019_Human', 'GO_Biological_Process_2018', 'GO_Cellular_Component_2018', 'GO_Molecular_Function_2018', 'OMIM_Disease', 'GWAS_Catalog_2019','DSigDB', 'Human_Gene_Atlas']
-		parent_dir = '/var/www/kgp/FlaskApp/static/'
-		directory = 'enrichr%s' % tempid
-		path = os.path.join(parent_dir, directory)
-
-		i = -1
-		idlist = []
-		for ID in userID:
-			namelist = ['New', 'Known', 'Union']
-			if ID not in idlist:
-				i += 1
-				idlist.append(ID)
-			for library in gene_set_list:
-				graphname = '/var/www/kgp/FlaskApp/static/enrichr%s/%s_%s_%s.png' % (tempid,tempid,namelist[i],library)
-				filename = '/var/www/kgp/FlaskApp/static/enrichr%s/%s_%s_%s.txt' % (tempid,tempid,namelist[i],library)
-				enrichr_grpah(tempid,ID,library,graphname,filename)
-		
-		f = open ('/var/www/kgp/FlaskApp/static/enrichr%s/graphdone.txt' % tempid, 'w')
-		f.write('This file is used to claim that all of the enrichment and corresponding visulization are done.')
-		f.close()
 
 	send_result(email, tempid)
 	queue = open('/var/www/kgp/FlaskApp/data/queue.txt','a')
@@ -802,239 +809,10 @@ def result(tempid):
 	else:
 		return render_template('redirect.html', tempid=tempid)
 
-def net_visualization(folder):
-	file_list = os.listdir(folder)
-	for gene_file in file_list :
-		# set the physics layout of the network
-		reference = gene_file.split(".")[0]
-		got_net = Network(height="75%", width="75%", font_color="black", heading=reference)
-		got_net.barnes_hut()
-		
-		got_data = pd.read_csv(folder+"/"+gene_file,sep='\t')
-
-		sources = got_data['Gene']
-		targets = got_data['Others']
-		gene_class = got_data['Gene_class']
-		others_Class = got_data['Others_Class']
-		weight_gene = got_data['Total number of interactions gene']
-		weight_other = got_data['Total number of interactions others']
-
-		edge_data = zip(sources, targets, weight_gene, weight_other, gene_class, others_Class)
-
-		for e in edge_data:
-			src = e[0]
-			dst = e[1]
-			weight_1 = e[2]
-			weight_2 = e[3]
-			gene_class = e[4]
-			others_class = e[5]
-			if gene_class == "Known" :
-				if src == reference :
-					got_net.add_node(src, src, title=src, group=1, shape = "dot", size = int(weight_1)*4+1000 , physics = True , borderWidth = 3 , borderWidthSelected = 7)
-				else:
-					got_net.add_node(src, src, title=src, group=2, shape = "dot", size = int(weight_1)*4 , physics = True , borderWidth = 3 , borderWidthSelected = 7)
-			if gene_class == "Predicted" :
-				if src == reference :
-					got_net.add_node(src, src, title=src, group=1, shape = "dot", size = int(weight_1)*4+1000, physics = True , borderWidth = 3 , borderWidthSelected = 7)
-				else:
-					got_net.add_node(src, src, title=src, group=3, shape = "dot", size = int(weight_1)*4, physics = True , borderWidth = 3 , borderWidthSelected = 7)
-			if others_class == "ANOTHERGEN" :
-				got_net.add_node(dst, dst, title=dst, group=4, shape = "box", size = int(weight_2)+50, physics = True , level = 2)
-			if others_class == "GOterm" :
-				got_net.add_node(dst, dst, title=dst, group=5, shape = "box", size = int(weight_2)+50, physics = True , level = 2)
-			if others_class == "disease" :
-				got_net.add_node(dst, dst, title=dst, group=6, shape = "box", size = int(weight_2)+50, physics = True , level = 2)
-			if others_class == "pubmedID" :
-				got_net.add_node(dst, dst, title=dst, group=7, shape = "box", size = int(weight_2)+50, physics = True , level = 2)
-			if others_class == "expression" :
-				got_net.add_node(dst, dst, title=dst, group=8, shape = "box", size = int(weight_2)+50, physics = True , level = 2)
-			if others_class == "molecule" :
-				got_net.add_node(dst, dst, title=dst, group=9, shape = "box", size = int(weight_2)+50, physics = True , level = 2)
-			
-			
-			got_net.add_edge(src, dst, physics = True)
-
-			neighbor_map = got_net.get_adj_list()
-
-		# add neighbor data to node hover data
-		for node in got_net.nodes:
-			node["title"] += "<br>Neighbors:<br>" + "<br>".join(neighbor_map[node["id"]])
-			node["value"] = len(neighbor_map[node["id"]])
-
-		got_net.show(folder+'/graph__'+gene_file.split(".")[0]+".html")
-		with open(folder+'/graph__'+gene_file.split(".")[0]+".html", 'r') as origin:
-			modified = []
-			for line in origin:
-				if 'nodes = new vis.DataSet' in line:
-					a = line.replace('        ','    ')
-				elif 'edges = new vis.DataSet' in line:
-					b = line.replace('        ','    ')
-				elif '// parsing and collecting nodes and edges from the python' in line:
-					e = line
-				else:
-					modified.append(line)
-		
-		flag = 0
-
-		modified.insert(modified.index('    var options, data;\n')+1,'    var highlightActive = false;\n')
-		modified.insert(modified.index('    var options, data;\n')+2, e)
-		modified.insert(modified.index('    var options, data;\n')+2, a)
-		modified.insert(modified.index('    var options, data;\n')+3, b)
-		modified.insert(modified.index('    function drawGraph() {\n')-2,'\n    // get a JSON object\n    var allNodes = nodes.get({ returnType: "Object" });\n')
-		modified = modified[0:modified.index( '        network = new vis.Network(container, data, options);\n')+1]
-		
-		c = '''
-						        
-        network = new vis.Network(container, data, options);
-        network.on("click", neighbourhoodHighlight);
-        network.physics.physicsEnabled = false
-		network.on("stabilizationProgress", function(params) {
-		document.getElementById('loadingBar').removeAttribute("style");
-		var maxWidth = 496;
-		var minWidth = 20;
-		var widthFactor = params.iterations/params.total;
-		var width = Math.max(minWidth,maxWidth * widthFactor);
-
-		document.getElementById('bar').style.width = width + 'px';
-		document.getElementById('text').innerHTML = Math.round(widthFactor*100) + '%';
-	});
-	network.once("stabilizationIterationsDone", function() {
-		document.getElementById('text').innerHTML = '100%';
-		document.getElementById('bar').style.width = '496px';
-		document.getElementById('loadingBar').style.opacity = 0;
-		// really clean the dom element
-		setTimeout(function () {document.getElementById('loadingBar').style.display = 'none';}, 500);
-                    });
-        return network;
-
-    }
-
-
-      function neighbourhoodHighlight(params) {
-        // if something is selected:
-        if (params.nodes.length > 0) {
-          highlightActive = true;
-          var i, j;
-          var selectedNode = params.nodes[0];
-          var degrees = 2;
-
-          // mark all nodes as hard to read.
-          for (var nodeId in allNodes) {
-            allNodes[nodeId].color = "rgba(200,200,200,0.5)";
-            if (allNodes[nodeId].hiddenLabel === undefined) {
-              allNodes[nodeId].hiddenLabel = allNodes[nodeId].label;
-              allNodes[nodeId].label = undefined;
-            }
-          }
-          var connectedNodes = network.getConnectedNodes(selectedNode);
-          var allConnectedNodes = [];
-
-          // get the second degree nodes
-          for (i = 1; i < degrees; i++) {
-            for (j = 0; j < connectedNodes.length; j++) {
-              allConnectedNodes = allConnectedNodes.concat(
-                network.getConnectedNodes(connectedNodes[j])
-              );
-            }
-          }
-
-          // all second degree nodes get a different color and their label back
-          for (i = 0; i < allConnectedNodes.length; i++) {
-            allNodes[allConnectedNodes[i]].color = "rgba(150,150,150,0.75)";
-            if (allNodes[allConnectedNodes[i]].hiddenLabel !== undefined) {
-              allNodes[allConnectedNodes[i]].label =
-                allNodes[allConnectedNodes[i]].hiddenLabel;
-              allNodes[allConnectedNodes[i]].hiddenLabel = undefined;
-            }
-          }
-
-          // all first degree nodes get their own color and their label back
-          for (i = 0; i < connectedNodes.length; i++) {
-            allNodes[connectedNodes[i]].color = undefined;
-            if (allNodes[connectedNodes[i]].hiddenLabel !== undefined) {
-              allNodes[connectedNodes[i]].label =
-                allNodes[connectedNodes[i]].hiddenLabel;
-              allNodes[connectedNodes[i]].hiddenLabel = undefined;
-            }
-          }
-
-          // the main node gets its own color and its label back.
-          allNodes[selectedNode].color = undefined;
-          if (allNodes[selectedNode].hiddenLabel !== undefined) {
-            allNodes[selectedNode].label = allNodes[selectedNode].hiddenLabel;
-            allNodes[selectedNode].hiddenLabel = undefined;
-          }
-        } else if (highlightActive === true) {
-          // reset all nodes
-          for (var nodeId in allNodes) {
-            allNodes[nodeId].color = undefined;
-            if (allNodes[nodeId].hiddenLabel !== undefined) {
-              allNodes[nodeId].label = allNodes[nodeId].hiddenLabel;
-              allNodes[nodeId].hiddenLabel = undefined;
-            }
-          }
-          highlightActive = false;
-        }
-
-        // transform the object into an array
-        var updateArray = [];
-        for (nodeId in allNodes) {
-          if (allNodes.hasOwnProperty(nodeId)) {
-            updateArray.push(allNodes[nodeId]);
-          }
-        }
-        nodes.update(updateArray);
-      }
-    
-
-    var g = drawGraph();
-
-</script>'''
-
-
-		d = '''
-</body>
-</html>
-		'''
-
-		os.remove(folder+'/graph__'+gene_file.split(".")[0]+".html")
-		with open(folder+'/'+gene_file.split(".")[0]+".html", 'a') as newer:
-			for i in range(len(modified)-2):
-				if modified[i] == '<script type="text/javascript">\n':
-					flag = 1
-				if flag == 1:
-					newer.write(modified[i])
-			
-			newer.write(c)
-		with open(folder+'/graph_'+gene_file.split(".")[0]+".html", 'a') as highlighted:
-			for i in range(len(modified)):
-				highlighted.write(modified[i])
-			highlighted.write(c)
-			highlighted.write(d)
-
-
-
-def get_enrichment_results(tempid,ID,library): 
-	try:
-		ENRICHR_URL = 'http://maayanlab.cloud/Enrichr/export'
-		query_string = '?userListId=%s&filename=%s&backgroundType=%s'
-		user_list_id = ID
-		filename = '/var/www/kgp/FlaskApp/static/enrichr%s/%s_%s.txt' % (tempid,ID,library)
-		gene_set_library = library # str(library)
-		if not os.path.exists(filename):
-			url = ENRICHR_URL + query_string % (user_list_id, filename, gene_set_library)
-			response = requests.get(url, stream=True)
-			with open(filename, 'wb') as f:
-				for chunk in response.iter_content(chunk_size=1024): 
-					if chunk:
-						f.write(chunk)
-	except Exception as e:
-		pass 
-	
 
 def pie_chart(tempid, info, i):
 	graphname = '/var/www/kgp/FlaskApp/static/pie_chart_%s/%s_%s.png' % (tempid,tempid,i)
-	plt.figure()
+	plt.figure(num=1, clear=True)
 	x = [i.replace('_', ' ') for i in info.keys()]
 	sizes = [i/sum(info.values())*100 for i in info.values()]
 	labels = ['{0} - {1:1.2f} %'.format(i,j) for i,j in zip(x, sizes)]
@@ -1049,61 +827,60 @@ def pie_chart(tempid, info, i):
 											reverse=True))
 	plt.axis('equal')
 	plt.title(str(i))
-	plt.legend(patches, labels, loc='upper right', bbox_to_anchor=(-0.1, 1.),fontsize=8)
-	# plt.legend()
-	# plt.tight_layout(rect=[0.03, 0.05, 0.97, 1])
-	# plt.autoscale()
+	plt.legend(patches, labels, loc='upper right', bbox_to_anchor=(-0.1, 1.),fontsize=14)
 	plt.savefig(graphname, dpi=100, transparent=True, bbox_inches='tight')
+	plt.cla()
 	plt.clf()
+	plt.close()
 	plt.close('all')
 
-	
-def enrichr_grpah(tempid,ID,library,graphname,filename):
-	title = ['ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X','KEGG_2019_Human','GO_Biological_Process_2018','GO_Cellular_Component_2018','GO_Molecular_Function_2018','OMIM_Disease','GWAS_Catalog_2019','DSigDB','Human_Gene_Atlas']
+
+
+def enrichr_grpah(tempid,db,graphname,filename):
 	if os.path.exists(filename):
-		bar_data = pd.read_csv(filename,sep="\t",header=0)
-		gene_name_list = list(bar_data["Genes"])
-		pvalue = list(bar_data["Adjusted P-value"])
-		rawp = list(bar_data["P-value"])
-		odds_radio = list(bar_data["Odds Ratio"])
-		overlap = list(bar_data["Overlap"])
-		term = list(bar_data["Term"])
-		zipped = zip(gene_name_list,pvalue,rawp,odds_radio,overlap,term)
-		sort_zipped = sorted(zipped,key=lambda x:x[1])
-		result = zip(*sort_zipped)
-		gene_name_list,pvalue,rawp,odds_radio,overlap,term = [list(x)[0:10][::-1] for x in result]
-		logp = 0 - np.log10(pvalue)
-		fig, ax = plt.subplots()
-		color_list = []
-		for i in range(len(pvalue)):
-			if float(pvalue[i]) < 0.05:
-				color_list.append('#8dd3c7')
-			elif float(pvalue[i]) > 0.05 and float(rawp[i]) < 0.05:
-				color_list.append('#ffffb3')
-			elif float(pvalue[i]) > 0.05 and float(rawp[i]) > 0.05:
-				color_list.append('#EA9999')
+		try:
+			bar_data = pd.read_csv(filename,sep="\t",header=0)
+			gene_name_list = list(bar_data["study_items"])
+			pvalue = list(bar_data["p_fdr_bh"])
+			rawp = list(bar_data["p_uncorrected"])
+			# odds_radio = list(bar_data["Odds Ratio"])
+			overlap = list(bar_data["ratio_in_study"])
+			term = list(bar_data[bar_data.columns[0]])
+			zipped = zip(gene_name_list,pvalue,rawp,overlap,term)
+			sort_zipped = sorted(zipped,key=lambda x:x[1])
+			result = zip(*sort_zipped)
+			gene_name_list,pvalue,rawp,overlap,term = [list(x)[0:10][::-1] for x in result]
+			logp = 0 - np.log10(pvalue)
+			fig, ax = plt.subplots()
+			color_list = []
+			for i in range(len(pvalue)):
+				if float(pvalue[i]) < 0.05:
+					color_list.append('#8dd3c7')
+				elif float(pvalue[i]) > 0.05 and float(rawp[i]) < 0.05:
+					color_list.append('#ffffb3')
+				elif float(pvalue[i]) > 0.05 and float(rawp[i]) > 0.05:
+					color_list.append('#EA9999')
 
-		b = ax.barh(range(len(gene_name_list)), logp, color=color_list)
-		i = 0
-		for rect in b:
-			w = rect.get_width()
-			# ax.text(w, rect.get_y()+rect.get_height()/1.5, '%.1f(%s)' % (float(odds_radio[i]),str(overlap[i])), ha='left', va='center', fontsize=7)
-			ax.text(0, rect.get_y()+rect.get_height()/2, ' %s' % str(term[i]), ha='left', va='center',fontsize=8)
-			i += 1
-		ax.spines['top'].set_visible(False)
-		ax.spines['right'].set_visible(False)
-		ax.set_yticks(range(len(gene_name_list)))
-		ylabel_list = ['%.1f(%s)' % (float(odds_radio[i]),str(overlap[i])) for i in range(len(pvalue))]
-		ax.set_yticklabels(ylabel_list)
-		plt.xlabel("-log($\mathregular{P_{adj}}$)")
-		for i in title:
-			if library in i:
-				plt.title(str(i))
-		plt.tight_layout()
-		fig.savefig(graphname, dpi=400)
-		plt.clf()
-		plt.close('all')
-
+			b = ax.barh(range(len(gene_name_list)), logp, color=color_list)
+			i = 0
+			for rect in b:
+				w = rect.get_width()
+				# ax.text(w, rect.get_y()+rect.get_height()/1.5, '%.1f(%s)' % (float(odds_radio[i]),str(overlap[i])), ha='left', va='center', fontsize=7)
+				ax.text(0, rect.get_y()+rect.get_height()/2, ' %s' % str(term[i]), ha='left', va='center',fontsize=8)
+				i += 1
+			ax.spines['top'].set_visible(False)
+			ax.spines['right'].set_visible(False)
+			ax.set_yticks(range(len(gene_name_list)))
+			ylabel_list = ['%s' % str(overlap[i]) for i in range(len(pvalue))]
+			ax.set_yticklabels(ylabel_list)
+			plt.xlabel("-log($\mathregular{P_{adj}}$)")
+			plt.title(str(db).replace(' Illumina body map',''))
+			plt.tight_layout()
+			fig.savefig(graphname, dpi=400)
+			plt.clf()
+			plt.close('all')
+		except:
+			pass
 
 
 @app.route('/download/<tempid>')
@@ -1114,12 +891,14 @@ def downloadFile(tempid):
 		dirpath1 = '/var/www/kgp/FlaskApp/static/enrichr%s/' % tempid
 		dirpath2 = '/var/www/kgp/FlaskApp/static/graph_dir%s/' % tempid
 		dirpath3 = '/var/www/kgp/FlaskApp/static/pie_chart_%s/' % tempid
+		dirpath4 = '/var/www/kgp/FlaskApp/model_results/results_genomic_regions_%s/' % tempid
 		filelist2 = search(dirpath1, '_')
 		filelist3 = search(dirpath2, '.txt')
 		filelist4 = search(dirpath2, '_')
 		filelist5 = search(dirpath3, '.png')
+		filelist6 = search(dirpath4, '.bed')
 
-		for f in filelist1 + filelist2 + filelist3 + filelist4 + filelist5:
+		for f in filelist1 + filelist2 + filelist3 + filelist4 + filelist5 + filelist6:
 			addfile('/var/www/kgp/FlaskApp/cache/zip%s.zip' % tempid, f,-2)
 		addfile('/var/www/kgp/FlaskApp/cache/zip%s.zip' % tempid, '/var/www/kgp/FlaskApp/README.TXT',-1)
 	return send_file(path, as_attachment=True)
